@@ -1,0 +1,28 @@
+services:
+  app:
+    build: .
+    container_name: nest-app
+    ports:
+      - '3000:3000'
+    environment:
+      - NODE_ENV=production
+      - TZ=Asia/Tbilisi
+    depends_on: []
+
+  postgres:
+    image: postgres:15
+    container_name: my_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: app123
+      POSTGRES_DB: postgres
+      TZ: Asia/Tbilisi
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  grafana-storage:
+  pgdata:
