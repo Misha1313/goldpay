@@ -8,6 +8,7 @@ import { AuthOtpCodeEntity } from './entities/auth-otp-code.entity';
 import { Repository } from 'typeorm';
 import { differenceInSeconds } from 'date-fns';
 import { AuthEntity } from './entities/auth.entity';
+import { SmsService } from 'src/providers/sms/sms.service';
 
 export type JwtPayload = {
   sub: string;
@@ -24,6 +25,7 @@ export class AuthService {
     private readonly authOtpCodeRepository: Repository<AuthOtpCodeEntity>,
     @InjectRepository(AuthEntity)
     private readonly authRepository: Repository<AuthEntity>,
+    private readonly smsService: SmsService,
   ) {}
 
   async login(user: AuthOtpCodeEntity): Promise<any> {
@@ -60,7 +62,12 @@ export class AuthService {
 
     const Otp = this.generateOtp();
 
-    // send generated otp code and send as sms to user. same for driver and admin
+    await this.smsService.sendSms(
+      sendOtpDto.phoneNumber.slice(1),
+      `ავტორიზაციის კოდი: ${Otp}`,
+    );
+
+    console.log('sms', sendOtpDto.phoneNumber.slice(1), Otp);
 
     const authOtpCodeEntity = this.authOtpCodeRepository.create({
       parkId: driverInfo.parkId,

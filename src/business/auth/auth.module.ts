@@ -14,6 +14,7 @@ import { DriverModule } from '../driver/driver.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthEntity } from './entities/auth.entity';
 import { AuthOtpCodeEntity } from './entities/auth-otp-code.entity';
+import { SmsModule } from 'src/providers/sms/sms.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { AuthOtpCodeEntity } from './entities/auth-otp-code.entity';
         },
       }),
     }),
+    SmsModule,
   ],
   controllers: [AuthController],
   providers: [

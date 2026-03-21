@@ -22,9 +22,9 @@ import { migrations } from './migrations';
           synchronize: false,
           migrationsRun: true,
           migrations,
-          ssl: {
-            rejectUnauthorized: false, // required for AWS RDS
-          },
+          // ssl: {
+          //   rejectUnauthorized: false, // required for AWS RDS
+          // },
         };
       },
       inject: [ConfigService],
