@@ -1,13 +1,13 @@
 services:
-  app:
-    build: .
-    container_name: nest-app
-    ports:
-      - '3000:3000'
-    environment:
-      - NODE_ENV=production
-      - TZ=Asia/Tbilisi
-    depends_on: []
+  # app:
+  #   build: .
+  #   container_name: nest-app
+  #   ports:
+  #     - '3000:3000'
+  #   environment:
+  #     - NODE_ENV=production
+  #     - TZ=Asia/Tbilisi
+  #   depends_on: []
 
   postgres:
     image: postgres:15

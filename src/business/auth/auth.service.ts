@@ -58,6 +58,8 @@ export class AuthService {
       sendOtpDto.parkId,
     );
 
+    console.log('driverInfo', driverInfo);
+
     if (!driverInfo) throw new UnauthorizedException('Invalid credentials');
 
     const Otp = this.generateOtp();
@@ -113,6 +115,8 @@ export class AuthService {
       roleId,
       parkId,
     });
+
+    console.log('driver otp', driver, phoneNumber);
 
     if (differenceInSeconds(new Date(), driver.updatedAt) > 60) {
       console.log('Otp is outdated');

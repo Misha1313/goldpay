@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import axios, { AxiosRequestConfig } from 'axios';
+import { WithdrawRequest } from 'src/business/transaction/requests/withdraw.request';
 
 export type DriversProfilesQuery = {
   id: string;
@@ -8,20 +10,31 @@ export type DriversProfilesQuery = {
   };
 };
 
+export type UpdateDriverBalanceErrorResponse = {
+  code: string;
+  message: string;
+};
+
 @Injectable()
 export class YandexService {
+  private X_API_KEY = this.configService.get<string>('X_API_KEY');
+  private X_CLIENT_ID = this.configService.get<string>('X_CLIENT_ID');
+  private X_PARK_ID = this.configService.get<string>('X_PARK_ID');
+
+  constructor(private readonly configService: ConfigService) {}
+
   async getDriverBalance(driverId: string) {
     const url = `https://fleet-api.taxi.yandex.net/v1/parks/contractors/blocked-balance?contractor_id=${driverId}`;
 
     const headers = {
-      'X-API-Key': 'pIFadyQBjayCgWhNpCcQIPSMOpZPnPOeFrKI',
-      'X-Client-ID': 'taxi/park/4d98e8bc5e1b4787885eeb3dcfaa7cd1',
-      'X-Park-ID': '4d98e8bc5e1b4787885eeb3dcfaa7cd1',
+      'X-API-Key': this.X_API_KEY,
+      'X-Client-ID': this.X_CLIENT_ID,
+      'X-Park-ID': this.X_PARK_ID,
     };
 
     const config: AxiosRequestConfig = {
       headers,
-      timeout: 5000, // optional
+      timeout: 10000, // optional
     };
 
     try {
@@ -40,14 +53,14 @@ export class YandexService {
     const url = `https://fleet-api.taxi.yandex.net/v2/parks/contractors/driver-profile?contractor_profile_id=${driverId}`;
 
     const headers = {
-      'X-API-Key': 'pIFadyQBjayCgWhNpCcQIPSMOpZPnPOeFrKI',
-      'X-Client-ID': 'taxi/park/4d98e8bc5e1b4787885eeb3dcfaa7cd1',
-      'X-Park-ID': '4d98e8bc5e1b4787885eeb3dcfaa7cd1',
+      'X-API-Key': this.X_API_KEY,
+      'X-Client-ID': this.X_CLIENT_ID,
+      'X-Park-ID': this.X_PARK_ID,
     };
 
     const config: AxiosRequestConfig = {
       headers,
-      timeout: 5000, // optional
+      timeout: 10000, // optional
     };
 
     try {
@@ -81,17 +94,17 @@ export class YandexService {
       // fields: {
       //   driver_profile: ['first_name', 'last_name', 'id'],
       // },
-      limit: 3,
+      // limit: 3,
     };
 
     const headers = {
-      'X-API-Key': 'pIFadyQBjayCgWhNpCcQIPSMOpZPnPOeFrKI',
-      'X-Client-ID': 'taxi/park/4d98e8bc5e1b4787885eeb3dcfaa7cd1',
+      'X-API-Key': this.X_API_KEY,
+      'X-Client-ID': this.X_CLIENT_ID,
     };
 
     const config: AxiosRequestConfig = {
       headers,
-      timeout: 5000, // optional
+      timeout: 10000, // optional
     };
 
     try {
@@ -99,6 +112,48 @@ export class YandexService {
       return response.data;
     } catch (error) {
       console.error('POST request failed:', error.message);
+      throw error;
+    }
+  }
+
+  async updateDriverBalance(
+    parkId: string,
+    driverId: string,
+    amount: number,
+    token: string,
+  ) {
+    const url =
+      'https://fleet-api.taxi.yandex.net/v2/parks/driver-profiles/transactions';
+
+    const payload = {
+      park_id: parkId,
+      driver_profile_id: driverId,
+      category_id: 'partner_service_manual',
+      amount: amount.toString(),
+      description: 'withdraw balance',
+    };
+
+    const headers = {
+      'X-API-Key': this.X_API_KEY,
+      'X-Client-ID': this.X_CLIENT_ID,
+      'X-Idempotency-Token': token,
+    };
+
+    const config: AxiosRequestConfig = {
+      headers,
+      timeout: 15000, // optional
+    };
+
+    try {
+      const response = await axios.post(url, payload, config);
+      return response.data;
+    } catch (error: any) {
+      console.error(
+        'updateDriverBalance failed:',
+        error?.response?.data,
+        error?.response?.data?.code,
+        error?.response?.data?.message,
+      );
       throw error;
     }
   }
