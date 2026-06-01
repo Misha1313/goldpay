@@ -455,25 +455,40 @@ export class TransactionService {
     });
   }
 
-  async getTransactions(request: GetTransactionsRequest) {
-    return (
-      this.transactionRepository
-        .createQueryBuilder('transaction')
-        .select([
-          'transaction.createdAt',
-          'transaction.amount',
-          'transaction.statusId',
-          'transaction.iban',
-        ])
-        .where('transaction.parkId = :parkId', { parkId: request.parkId })
-        .andWhere('transaction.driverId = :driverId', {
-          driverId: request.driverId,
-        })
-        .orderBy('transaction.createdAt')
-        .take(60)
-        // .take(request.take)
-        // .skip(request.skip)
-        .getMany()
-    );
+  async getTransactions(
+    request: GetTransactionsRequest,
+    jwtPayload: JwtPayload,
+  ) {
+    const { sub: driverId, parkId } = jwtPayload;
+    const [data, count] = await this.transactionRepository
+      .createQueryBuilder('transaction')
+      .select([
+        'transaction.createdAt',
+        'transaction.amount',
+        'transaction.statusId',
+        'transaction.iban',
+      ])
+      .where('transaction.parkId = :parkId', { parkId })
+      .andWhere('transaction.driverId = :driverId', {
+        driverId,
+      })
+      .orderBy('transaction.createdAt')
+      .take(request.take)
+      .skip(request.skip)
+      .getManyAndCount();
+
+    return { data, count };
+  }
+
+  async refillBalance(jwtPayload: JwtPayload) {
+    const { sub: driverId, parkId } = jwtPayload;
+    if (
+      ![
+        '5f7db4f7e4dc4ff68505a25ee8606219', // alim
+        '29daa66634ac497a94cbf32c3cea1a18', // misha
+      ].includes(driverId)
+    )
+      return;
+    return this.updateDriverBalance(parkId, driverId, 5);
   }
 }

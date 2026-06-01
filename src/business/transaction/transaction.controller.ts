@@ -18,15 +18,21 @@ export class TransactionController {
     return this.transactionService.withdrawBalance(request, req.user);
   }
 
-  @Public()
+  // @Public()
   @Get('payment-accounts')
   getPaymentAccounts(@Query() request: GetPaymentAccountsRequest) {
     return this.transactionService.getPaymentAccounts(request);
   }
 
-  @Public()
+  // @Public()
   @Get()
-  getTransactions(@Query() request: GetTransactionsRequest) {
-    return this.transactionService.getTransactions(request);
+  getTransactions(@Query() request: GetTransactionsRequest, @Req() req) {
+    return this.transactionService.getTransactions(request, req.user);
+  }
+
+  // @Public()
+  @Post('refill-balance-dev')
+  refillBalance(@Req() req) {
+    return this.transactionService.refillBalance(req.user);
   }
 }
