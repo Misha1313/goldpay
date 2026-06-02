@@ -448,10 +448,11 @@ export class TransactionService {
     }
   }
 
-  async getPaymentAccounts(request: GetPaymentAccountsRequest) {
+  async getPaymentAccounts(jwtPayload: JwtPayload) {
+    const { sub: driverId, parkId } = jwtPayload;
     return this.paymentAccountRepository.findBy({
-      parkId: request.parkId,
-      driverId: request.driverId,
+      parkId,
+      driverId,
     });
   }
 

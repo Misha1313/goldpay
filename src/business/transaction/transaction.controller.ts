@@ -20,8 +20,8 @@ export class TransactionController {
 
   // @Public()
   @Get('payment-accounts')
-  getPaymentAccounts(@Query() request: GetPaymentAccountsRequest) {
-    return this.transactionService.getPaymentAccounts(request);
+  getPaymentAccounts(@Req() req) {
+    return this.transactionService.getPaymentAccounts(req.user);
   }
 
   // @Public()
