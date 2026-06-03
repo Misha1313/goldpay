@@ -13,4 +13,9 @@ export class DriverController {
   getDriverBalance(@Req() req) {
     return this.driverService.getDriverBalance(req.user);
   }
+
+  @Get('info')
+  getDriverInfo(@Req() req) {
+    return this.driverService.getDriverInfo(req.user);
+  }
 }

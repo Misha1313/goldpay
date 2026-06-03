@@ -10,6 +10,20 @@ export type DriversProfilesQuery = {
   };
 };
 
+export type GetDriverProfileResponse = {
+  person: {
+    full_name: {
+      first_name: string;
+      last_name: string;
+    }
+  }
+}
+
+export type GetDriverBalanceResponse = {
+  balance: number;
+  blocked_balance: number;
+};
+
 export type UpdateDriverBalanceErrorResponse = {
   code: string;
   message: string;
@@ -23,7 +37,7 @@ export class YandexService {
 
   constructor(private readonly configService: ConfigService) {}
 
-  async getDriverBalance(driverId: string) {
+  async getDriverBalance(driverId: string): Promise<GetDriverBalanceResponse> {
     const url = `https://fleet-api.taxi.yandex.net/v1/parks/contractors/blocked-balance?contractor_id=${driverId}`;
 
     const headers = {
@@ -49,7 +63,7 @@ export class YandexService {
     }
   }
 
-  async getDriverProfile(driverId: string) {
+  async getDriverProfile(driverId: string): Promise<GetDriverProfileResponse> {
     const url = `https://fleet-api.taxi.yandex.net/v2/parks/contractors/driver-profile?contractor_profile_id=${driverId}`;
 
     const headers = {
