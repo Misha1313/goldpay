@@ -284,7 +284,7 @@ export class TransactionService {
   }
 
   // create job for pay check
-  @Cron(CronExpression.EVERY_30_SECONDS)
+  @Cron(CronExpression.EVERY_MINUTE)
   async handlePendingTransactions() {
     let offset = 0;
     const batchSize = 2;
@@ -464,6 +464,7 @@ export class TransactionService {
     const [data, count] = await this.transactionRepository
       .createQueryBuilder('transaction')
       .select([
+        'transaction.id',
         'transaction.createdAt',
         'transaction.amount',
         'transaction.statusId',
@@ -473,7 +474,7 @@ export class TransactionService {
       .andWhere('transaction.driverId = :driverId', {
         driverId,
       })
-      .orderBy('transaction.createdAt')
+      .orderBy('transaction.createdAt', 'DESC')
       .take(request.take)
       .skip(request.skip)
       .getManyAndCount();
