@@ -7,6 +7,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { TransactionEntity } from './entities/transaction.entity';
 import { TransactionStatusEntity } from './entities/transaction-status.entity';
 import { PaymentAccountEntity } from './entities/payment-account.entity';
+import { CommonModule } from '../common/common.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { PaymentAccountEntity } from './entities/payment-account.entity';
     ]),
     YandexModule,
     PaymentModule,
+    CommonModule
   ],
   controllers: [TransactionController],
   providers: [TransactionService],

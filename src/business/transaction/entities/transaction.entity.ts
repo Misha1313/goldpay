@@ -7,6 +7,7 @@ import {
   JoinColumn,
   ManyToOne,
   PrimaryColumn,
+  PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { TransactionStatusEntity } from './transaction-status.entity';
@@ -17,8 +18,8 @@ import { TransactionStatusEntity } from './transaction-status.entity';
 })
 @Index(['parkId', 'driverId'])
 export class TransactionEntity {
-  @PrimaryColumn()
-  id: string;
+  @PrimaryGeneratedColumn()
+  id: number;
 
   @PrimaryColumn()
   createdAt: Date;

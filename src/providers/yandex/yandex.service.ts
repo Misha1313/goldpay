@@ -15,9 +15,9 @@ export type GetDriverProfileResponse = {
     full_name: {
       first_name: string;
       last_name: string;
-    }
-  }
-}
+    };
+  };
+};
 
 export type GetDriverBalanceResponse = {
   balance: number;
@@ -35,31 +35,40 @@ export class YandexService {
   private X_CLIENT_ID = this.configService.get<string>('X_CLIENT_ID');
   private X_PARK_ID = this.configService.get<string>('X_PARK_ID');
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(private readonly configService: ConfigService) { }
 
-  async getDriverBalance(driverId: string): Promise<GetDriverBalanceResponse> {
-    const url = `https://fleet-api.taxi.yandex.net/v1/parks/contractors/blocked-balance?contractor_id=${driverId}`;
+  async getDriverBalance(driverId: string) {
+    const retries = Number(this.configService.get<number>('RETRY_NUMBER'));
+    const delayMs = Number(this.configService.get<number>('RETRY_INTERVAL'));
 
-    const headers = {
-      'X-API-Key': this.X_API_KEY,
-      'X-Client-ID': this.X_CLIENT_ID,
-      'X-Park-ID': this.X_PARK_ID,
-    };
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const url = `https://fleet-api.taxi.yandex.net/v1/parks/contractors/blocked-balance?contractor_id=${driverId}`;
 
-    const config: AxiosRequestConfig = {
-      headers,
-      timeout: 10000, // optional
-    };
+        const headers = {
+          'X-API-Key': this.X_API_KEY,
+          'X-Client-ID': this.X_CLIENT_ID,
+          'X-Park-ID': this.X_PARK_ID,
+        };
 
-    try {
-      const response = await axios.get(url, config);
-      return response.data;
-    } catch (error) {
-      console.error('getDriverBalance request failed:', error.response.data);
-      if (error.response.status === 404) {
-        throw new NotFoundException('Contractor not found');
+        const config: AxiosRequestConfig = {
+          headers,
+          timeout: 10000, // optional
+        };
+
+        const response = await axios.get(url, config);
+
+        console.log('getDriverBalanceResponse', response.data);
+
+        return response.data;
+      } catch (error: any) {
+        console.log('getDriverBalance error:', error.message);
+        if (attempt < retries) {
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          continue;
+        }
+        throw error;
       }
-      throw error;
     }
   }
 

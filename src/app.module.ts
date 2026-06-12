@@ -10,6 +10,7 @@ import { ConfigModule } from './config/config.module';
 import { PaymentModule } from './providers/payment/payment.module';
 import { TransactionModule } from './business/transaction/transaction.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { CommonModule } from './business/common/common.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     PaymentModule,
     TransactionModule,
     ScheduleModule.forRoot(),
+    CommonModule
   ],
   controllers: [AppController],
   providers: [AppService],

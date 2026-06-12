@@ -23,9 +23,7 @@ export class CreateTransactionTables1779182442871
                 CONSTRAINT "PK_bb95477ae48c741a9c1445babfd" PRIMARY KEY ("id")
             )
         `);
-    await queryRunner.query(`
-            CREATE INDEX "IDX_c38824a36049ba13ec1bea4ceb" ON "payment_account" ("park_id", "driver_id")
-        `);
+  
     await queryRunner.query(`
             CREATE TABLE "transaction_status" (
                 "id" integer NOT NULL,
@@ -35,7 +33,7 @@ export class CreateTransactionTables1779182442871
         `);
     await queryRunner.query(`
             CREATE TABLE "transaction" (
-                "id" character varying NOT NULL,
+                "id" SERIAL NOT NULL,
                 "created_at" TIMESTAMP NOT NULL,
                 "park_id" character varying NOT NULL,
                 "driver_id" character varying,

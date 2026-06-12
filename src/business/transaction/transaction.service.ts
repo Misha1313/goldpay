@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import {
   PaymentService,
   PayResponse,
@@ -19,9 +19,14 @@ import { PaymentAccountEntity } from './entities/payment-account.entity';
 import { GetPaymentAccountsRequest } from './requests/get-payment-accounts.request';
 import { GetTransactionsRequest } from './requests/get-transactions.request';
 import { JwtPayload } from '../auth/auth.service';
+import { JobRunningHistoryEntity } from '../common/entities/job-running-history.entity';
+import { JobConfigEntity } from '../common/entities/job-config.entity';
+import { JobConfigEnum } from '../common/enums/job-config.enum';
+import { JobRunningStatusEnum } from '../common/enums/job-running-status.enum';
 
 @Injectable()
 export class TransactionService {
+  private readonly logger = new Logger(TransactionService.name);
   constructor(
     private readonly yandexService: YandexService,
     private readonly paymentService: PaymentService,
@@ -30,10 +35,11 @@ export class TransactionService {
     private readonly configService: ConfigService,
     @InjectRepository(PaymentAccountEntity)
     private readonly paymentAccountRepository: Repository<PaymentAccountEntity>,
-  ) {}
+    @InjectRepository(JobRunningHistoryEntity)
+    private readonly jobRunningHistoryRepository: Repository<JobRunningHistoryEntity>,
+  ) { }
 
   async withdrawBalance(request: WithdrawRequest, jwtPayload: JwtPayload) {
-    const transactionId = uuidv4();
     const { sub: driverId, parkId } = jwtPayload;
 
     // const updateBalanceResponse = await this.updateDriverBalance(
@@ -55,7 +61,6 @@ export class TransactionService {
 
     // save in transactions table
     const newTransactionObject = this.transactionRepository.create({
-      id: transactionId,
       createdAt: new Date(),
       parkId: parkId,
       driverId: driverId,
@@ -74,7 +79,7 @@ export class TransactionService {
       request.firstName,
       request.lastName,
       request.amount,
-      transactionId,
+      newTransactionEntity.id,
     );
 
     console.log(
@@ -111,7 +116,7 @@ export class TransactionService {
         request.firstName,
         request.lastName,
         request.amount,
-        transactionId,
+        newTransactionEntity.id,
       );
 
       console.log(
@@ -150,7 +155,7 @@ export class TransactionService {
         await this.updateDriverBalance(parkId, driverId, request.amount);
       }
     } catch (error: any) {
-      console.log(error);
+      console.log('withdrawal error', error.message);
       if (error?.message === 'balance update') {
         console.log('balance error', error?.cause?.response?.data);
         await this.transactionRepository.update(
@@ -174,7 +179,7 @@ export class TransactionService {
 
   private async executePay(
     request: Partial<WithdrawRequest>,
-    transactionId: string,
+    transactionId: number,
   ) {
     const retries = Number(this.configService.get<number>('RETRY_NUMBER'));
     const delayMs = Number(this.configService.get<number>('RETRY_INTERVAL'));
@@ -284,42 +289,89 @@ export class TransactionService {
   }
 
   // create job for pay check
-  @Cron(CronExpression.EVERY_MINUTE)
+  @Cron(CronExpression.EVERY_30_SECONDS)
   async handlePendingTransactions() {
-    let offset = 0;
-    const batchSize = 2;
+    const lastJobRunningHistoryEntity = await this.jobRunningHistoryRepository
+      .createQueryBuilder('job')
+      .where('job.configKey = :configKey', {
+        configKey: JobConfigEnum.WithdrawalStatusCheck,
+      })
+      .andWhere('job.startDate > :minDate', {
+        minDate: format(subDays(new Date(), 1), 'yyyy-MM-dd HH:mm:ss'),
+      })
+      .orderBy('job.startDate', 'DESC')
+      .getOne();
 
-    const currentDate = format(new Date(), 'yyyy-MM-dd HH:mm:ss');
-    const minDate = format(subDays(new Date(), 1), 'yyyy-MM-dd HH:mm:ss');
-
-    while (true) {
-      const transactions = await this.transactionRepository
-        .createQueryBuilder('transaction')
-        .where('transaction.createdAt > :minDate', {
-          minDate,
-        })
-        .andWhere('transaction.createdAt < :maxDate', {
-          maxDate: currentDate,
-        })
-        .andWhere('transaction.statusId = :pendingStatus', {
-          pendingStatus: TransactionStatusEnum.Pending,
-        })
-        .orderBy('transaction.createdAt')
-        .skip(offset)
-        .take(batchSize)
-        .getMany();
-
+    if (
+      lastJobRunningHistoryEntity?.statusId === JobRunningStatusEnum.Running
+    ) {
       console.log(
-        'transactions',
-        offset,
-        transactions.map((item) => item.createdAt),
+        'Previous handlePendingTransactions is still running -- skipping',
       );
+      return;
+    }
 
-      if (transactions.length === 0) return;
+    const jobRunningHistoryObject = this.jobRunningHistoryRepository.create({
+      startDate: new Date(),
+      configKey: JobConfigEnum.WithdrawalStatusCheck,
+      statusId: JobRunningStatusEnum.Running,
+    });
 
-      await Promise.all(transactions.map((row) => this.payCheck(row)));
+    const jobRunningHistoryEntity = await this.jobRunningHistoryRepository.save(
+      jobRunningHistoryObject,
+    );
 
-      offset += batchSize;
+    try {
+      let offset = 0;
+      const batchSize = 2;
+
+      const currentDate = format(new Date(), 'yyyy-MM-dd HH:mm:ss');
+      const minDate = format(subDays(new Date(), 1), 'yyyy-MM-dd HH:mm:ss');
+
+      while (true) {
+        const transactions = await this.transactionRepository
+          .createQueryBuilder('transaction')
+          .where('transaction.createdAt > :minDate', {
+            minDate,
+          })
+          .andWhere('transaction.createdAt < :maxDate', {
+            maxDate: currentDate,
+          })
+          .andWhere('transaction.statusId = :pendingStatus', {
+            pendingStatus: TransactionStatusEnum.Pending,
+          })
+          .orderBy('transaction.createdAt')
+          .skip(offset)
+          .take(batchSize)
+          .getMany();
+
+        console.log(
+          'transactions',
+          offset,
+          transactions.map((item) => item.createdAt),
+        );
+
+        if (transactions.length === 0) break;
+
+        await Promise.all(transactions.map((row) => this.payCheck(row)));
+
+        offset += batchSize;
+      }
+      await this.jobRunningHistoryRepository.update(
+        { id: jobRunningHistoryEntity.id },
+        {
+          statusId: JobRunningStatusEnum.Success,
+        },
+      );
+    } catch (error: any) {
+      this.logger.error(error);
+      await this.jobRunningHistoryRepository.update(
+        { id: jobRunningHistoryEntity.id },
+        {
+          statusId: JobRunningStatusEnum.Error,
+          error: error.message,
+        },
+      );
     }
   }
 
@@ -338,7 +390,7 @@ export class TransactionService {
       console.log(
         'errorCode',
         payCheckResponse.errorCode,
-        payCheckResponse.errorCode === 0,
+        payCheckResponse.data?.status,
       );
 
       // transaction did not reach provider. It needs to be repeated

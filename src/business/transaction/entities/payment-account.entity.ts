@@ -1,17 +1,11 @@
 import {
-  BeforeInsert,
-  BeforeUpdate,
   Column,
   CreateDateColumn,
   Entity,
-  Index,
-  JoinColumn,
-  ManyToOne,
   PrimaryGeneratedColumn,
   Unique,
   UpdateDateColumn,
 } from 'typeorm';
-import { TransactionStatusEntity } from './transaction-status.entity';
 
 @Entity({
   name: 'payment_account',

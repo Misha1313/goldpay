@@ -3,7 +3,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 export class CreateAuthTables1764779169345 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
-        DROP SCHEMA IF EXISTS auth cascade;
         CREATE SCHEMA IF NOT EXISTS auth;  
     `);
 

@@ -70,14 +70,14 @@ type PayCheckResponse = {
 
 @Injectable()
 export class PaymentService {
-  constructor(private readonly configService: ConfigService) {}
+  constructor(private readonly configService: ConfigService) { }
 
   async info(
     iban: string,
     firstName: string,
     lastName: string,
     amount: number,
-    transactionId: string,
+    transactionId: number,
   ): Promise<InfoResponse> {
     const url = this.configService.get<string>('PAYMENT_INFO_URL');
 
@@ -85,7 +85,7 @@ export class PaymentService {
       amount: amount,
       service_id: this.getServiceId(iban),
       currency_id: TransactionCurrencyEnum.Gel,
-      transaction_id: transactionId,
+      transaction_id: transactionId.toString(),
       service_params: {
         iban: iban,
         receiver_firstname: firstName,
@@ -105,13 +105,8 @@ export class PaymentService {
     };
     const requestDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
-    console.log('payload', payload);
-
-    console.log('requestDate', requestDate);
-
     const hash = this.getHash(payload, requestDate);
 
-    console.log('hash', hash);
 
     const headers = this.getHeaders(requestDate, hash);
 
@@ -135,7 +130,7 @@ export class PaymentService {
     firstName: string,
     lastName: string,
     amount: number,
-    transactionId: string,
+    transactionId: number,
   ): Promise<PayResponse> {
     const url = this.configService.get<string>('PAYMENT_PAY_URL');
 
@@ -143,7 +138,7 @@ export class PaymentService {
       amount: amount,
       service_id: this.getServiceId(iban),
       currency_id: TransactionCurrencyEnum.Gel,
-      transaction_id: transactionId,
+      transaction_id: transactionId.toString(),
       service_params: {
         iban: iban,
         receiver_firstname: firstName,
@@ -163,11 +158,7 @@ export class PaymentService {
     };
     const requestDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
-    console.log('payload', payload);
-
     const hash = this.getHash(payload, requestDate);
-
-    console.log('hash', hash);
 
     const headers = this.getHeaders(requestDate, hash);
 
@@ -186,11 +177,11 @@ export class PaymentService {
     }
   }
 
-  async payCheck(transactionId: string): Promise<PayCheckResponse> {
+  async payCheck(transactionId: number): Promise<PayCheckResponse> {
     const url = this.configService.get<string>('PAYMENT_PAY_CHECK_URL');
 
     const payload = {
-      transaction_id: transactionId,
+      transaction_id: transactionId.toString(),
     };
     const requestDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
