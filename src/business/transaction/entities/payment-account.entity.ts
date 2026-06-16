@@ -26,6 +26,9 @@ export class PaymentAccountEntity {
   driverId: string;
 
   @Column()
+  name: string;
+
+  @Column()
   iban: string;
 
   @Column()

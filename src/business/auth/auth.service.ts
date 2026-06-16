@@ -58,8 +58,6 @@ export class AuthService {
       sendOtpDto.parkId,
     );
 
-    console.log('driverInfo', driverInfo);
-
     if (!driverInfo) throw new UnauthorizedException('Invalid credentials');
 
     const Otp = this.generateOtp();
@@ -80,8 +78,6 @@ export class AuthService {
     });
 
     await this.fillOtpCode(authOtpCodeEntity);
-
-    return Otp;
   }
 
   async validateUser(email: string, pass: string): Promise<any> {

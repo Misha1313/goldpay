@@ -16,6 +16,10 @@ import {
 import { TransactionServiceEnum } from '../enums/transaction-service.enum';
 
 export class WithdrawRequest {
+  @ApiProperty({ default: 'Tbc' })
+  @IsNotEmpty()
+  paymentAccountName: string;
+
   @ApiProperty({ default: 'GE33LB0111151009668000' })
   @Transform(({ value }) =>
     typeof value === 'string' ? value.replace(/\s/g, '').toUpperCase() : value,

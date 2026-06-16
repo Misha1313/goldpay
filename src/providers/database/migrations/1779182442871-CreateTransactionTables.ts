@@ -14,6 +14,7 @@ export class CreateTransactionTables1779182442871
                 "created_at" TIMESTAMP NOT NULL DEFAULT now(),
                 "park_id" character varying NOT NULL,
                 "driver_id" character varying,
+                "name" character varying NOT NULL,
                 "iban" character varying NOT NULL,
                 "receiver_first_name" character varying NOT NULL,
                 "receiver_last_name" character varying NOT NULL,

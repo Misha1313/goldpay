@@ -12,6 +12,7 @@ import { TransactionRegistrationEntity } from './entities/transaction-registrati
 import { BalanceRollbackEntity } from './entities/balance-rollback.entity';
 import { BalanceRollbackStatusEntity } from './entities/balance-rollback-status.entity';
 import { BalanceRollbackService } from './services/balance-rollback.service';
+import { CheckPaymentService } from './services/check-payment.service';
 
 @Module({
   imports: [
@@ -28,7 +29,7 @@ import { BalanceRollbackService } from './services/balance-rollback.service';
     CommonModule,
   ],
   controllers: [TransactionController],
-  providers: [TransactionService, BalanceRollbackService],
+  providers: [TransactionService, BalanceRollbackService, CheckPaymentService],
   exports: [TransactionService],
 })
 export class TransactionModule {}
