@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosRequestConfig } from 'axios';
 import { WithdrawRequest } from 'src/business/transaction/requests/withdraw.request';
+import { v4 as uuidv4 } from 'uuid';
 
 export type DriversProfilesQuery = {
   id: string;
@@ -35,7 +36,7 @@ export class YandexService {
   private X_CLIENT_ID = this.configService.get<string>('X_CLIENT_ID');
   private X_PARK_ID = this.configService.get<string>('X_PARK_ID');
 
-  constructor(private readonly configService: ConfigService) { }
+  constructor(private readonly configService: ConfigService) {}
 
   async getDriverBalance(driverId: string) {
     const retries = Number(this.configService.get<number>('RETRY_NUMBER'));
@@ -139,45 +140,48 @@ export class YandexService {
     }
   }
 
-  async updateDriverBalance(
-    parkId: string,
-    driverId: string,
-    amount: number,
-    token: string,
-  ) {
-    const url =
-      'https://fleet-api.taxi.yandex.net/v2/parks/driver-profiles/transactions';
+  async updateDriverBalance(parkId: string, driverId: string, amount: number) {
+    const retries = Number(this.configService.get<number>('RETRY_NUMBER'));
+    const delayMs = Number(this.configService.get<number>('RETRY_INTERVAL'));
 
-    const payload = {
-      park_id: parkId,
-      driver_profile_id: driverId,
-      category_id: 'partner_service_manual',
-      amount: amount.toString(),
-      description: 'withdraw balance',
-    };
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const updateBalanceId = uuidv4();
 
-    const headers = {
-      'X-API-Key': this.X_API_KEY,
-      'X-Client-ID': this.X_CLIENT_ID,
-      'X-Idempotency-Token': token,
-    };
+        const url =
+          'https://fleet-api.taxi.yandex.net/v2/parks/driver-profiles/transactions';
 
-    const config: AxiosRequestConfig = {
-      headers,
-      timeout: 15000, // optional
-    };
+        const payload = {
+          park_id: parkId,
+          driver_profile_id: driverId,
+          category_id: 'partner_service_manual',
+          amount: amount.toString(),
+          description: 'withdraw balance',
+        };
 
-    try {
-      const response = await axios.post(url, payload, config);
-      return response.data;
-    } catch (error: any) {
-      console.error(
-        'updateDriverBalance failed:',
-        error?.response?.data,
-        error?.response?.data?.code,
-        error?.response?.data?.message,
-      );
-      throw error;
+        const headers = {
+          'X-API-Key': this.X_API_KEY,
+          'X-Client-ID': this.X_CLIENT_ID,
+          'X-Idempotency-Token': updateBalanceId,
+        };
+
+        const config: AxiosRequestConfig = {
+          headers,
+          timeout: 15000, // optional
+        };
+
+        const response = await axios.post(url, payload, config);
+
+        return response.data;
+      } catch (error: any) {
+        console.log('update driver balance error', error?.message);
+        if (attempt === retries) {
+          const errorType =
+            amount > 0 ? 'BALANCE_WITHDRAWAL' : 'BALANCE_ROLLBACK';
+          throw new Error(errorType);
+        }
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
     }
   }
 }

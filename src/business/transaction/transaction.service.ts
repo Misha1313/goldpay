@@ -1,4 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  Logger,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import {
   PaymentService,
   PayResponse,
@@ -23,6 +28,9 @@ import { JobRunningHistoryEntity } from '../common/entities/job-running-history.
 import { JobConfigEntity } from '../common/entities/job-config.entity';
 import { JobConfigEnum } from '../common/enums/job-config.enum';
 import { JobRunningStatusEnum } from '../common/enums/job-running-status.enum';
+import { TransactionRegistrationEntity } from './entities/transaction-registration.entity';
+import { BalanceRollbackEntity } from './entities/balance-rollback.entity';
+import { BalanceRollbackStatusEnum } from './enums/balance-rollback-status.enum';
 
 @Injectable()
 export class TransactionService {
@@ -37,26 +45,27 @@ export class TransactionService {
     private readonly paymentAccountRepository: Repository<PaymentAccountEntity>,
     @InjectRepository(JobRunningHistoryEntity)
     private readonly jobRunningHistoryRepository: Repository<JobRunningHistoryEntity>,
-  ) { }
+    @InjectRepository(TransactionRegistrationEntity)
+    private readonly transactionRegistrationRepository: Repository<TransactionRegistrationEntity>,
+    @InjectRepository(BalanceRollbackEntity)
+    private readonly balanceRollbackRepository: Repository<BalanceRollbackEntity>,
+  ) {}
 
   async withdrawBalance(request: WithdrawRequest, jwtPayload: JwtPayload) {
     const { sub: driverId, parkId } = jwtPayload;
 
-    // const updateBalanceResponse = await this.updateDriverBalance(
-    //   parkId,
-    //   driverId,
-    //   request.amount,
-    // );
-
-    // return;
+    await this.fillTransactionRegistration(driverId, parkId);
 
     const getBalanceResponse =
       await this.yandexService.getDriverBalance(driverId);
 
     // TODO - send error code
     if (getBalanceResponse.balance < request.amount) {
-      console.log('incorrect balance');
-      return;
+      console.log('Insufficient balance');
+      throw new UnprocessableEntityException({
+        errorCode: 'INSUFFICIENT_BALANCE',
+        message: 'Insufficient balance',
+      });
     }
 
     // save in transactions table
@@ -98,16 +107,18 @@ export class TransactionService {
           errorMessage: infoResponse.errorMessage,
         },
       );
+      await this.transactionRegistrationRepository.delete({ driverId, parkId });
       return;
     }
 
     // substract transaction amount from yandex balance
     try {
-      const updateBalanceResponse = await this.updateDriverBalance(
-        parkId,
-        driverId,
-        -request.amount,
-      );
+      const updateBalanceResponse =
+        await this.yandexService.updateDriverBalance(
+          parkId,
+          driverId,
+          -request.amount,
+        );
 
       console.log('updateBalanceResponse', updateBalanceResponse);
 
@@ -152,28 +163,75 @@ export class TransactionService {
 
       if (updatedTransactionStatus === TransactionStatusEnum.Cancell) {
         console.log('trying updateDriverBalance');
-        await this.updateDriverBalance(parkId, driverId, request.amount);
+        await this.yandexService.updateDriverBalance(
+          parkId,
+          driverId,
+          request.amount,
+        );
+      }
+
+      if (updatedTransactionStatus !== TransactionStatusEnum.Pending) {
+        await this.transactionRegistrationRepository.delete({
+          driverId,
+          parkId,
+        });
       }
     } catch (error: any) {
-      console.log('withdrawal error', error.message);
-      if (error?.message === 'balance update') {
-        console.log('balance error', error?.cause?.response?.data);
-        await this.transactionRepository.update(
-          { id: newTransactionEntity.id },
-          {
-            statusId: TransactionStatusEnum.Cancell,
-            balanceUpdateErrorCode: error?.cause?.response?.data?.code,
-            balanceUpdateErrorMessage: error?.cause?.response?.data?.message,
-          },
-        );
-      } else {
-        await this.transactionRepository.update(
-          { id: newTransactionEntity.id },
-          {
-            statusId: TransactionStatusEnum.Cancell,
-          },
-        );
+      if (error.message === 'TRANSACTION_IN_PROGRESS') {
+        throw error;
       }
+
+      if (error.message === 'INSUFFICIENT_BALANCE') {
+        await this.transactionRegistrationRepository.delete({
+          driverId,
+          parkId,
+        });
+        throw error;
+      }
+
+      if (['PAY', 'BALANCE_ROLLBACK'].includes(error.message)) {
+        // await this.transactionRepository.update(
+        //   { id: newTransactionEntity.id },
+        //   {
+        //     statusId: TransactionStatusEnum.Cancell,
+        //     balanceUpdateErrorCode: error?.response?.data?.code,
+        //     balanceUpdateErrorMessage: error?.response?.data?.message,
+        //   },
+        // );
+        const balanceRollbackObject = this.balanceRollbackRepository.create({
+          id: newTransactionEntity.id,
+          createdAt: newTransactionEntity.createdAt,
+          statusId: BalanceRollbackStatusEnum.New,
+          amount: newTransactionEntity.amount,
+        });
+        await this.balanceRollbackRepository.insert(balanceRollbackObject);
+      }
+      await this.transactionRepository.update(
+        { id: newTransactionEntity.id },
+        {
+          statusId: TransactionStatusEnum.Cancell,
+        },
+      );
+
+      await this.transactionRegistrationRepository.delete({
+        driverId,
+        parkId,
+      });
+    }
+  }
+
+  private async fillTransactionRegistration(driverId: string, parkId: string) {
+    try {
+      await this.transactionRegistrationRepository.insert({
+        parkId,
+        driverId,
+      });
+    } catch (error) {
+      console.log('Driver already has an active transaction');
+      throw new ConflictException({
+        errorCode: 'TRANSACTION_IN_PROGRESS',
+        message: 'User already has a pending transaction',
+      });
     }
   }
 
@@ -207,38 +265,6 @@ export class TransactionService {
         return payResponse;
       } catch (error) {
         console.log('executePay error');
-      }
-    }
-  }
-
-  private async updateDriverBalance(
-    parkId: string,
-    driverId: string,
-    amount: number,
-  ) {
-    const retries = Number(this.configService.get<number>('RETRY_NUMBER'));
-    const delayMs = Number(this.configService.get<number>('RETRY_INTERVAL'));
-
-    for (let attempt = 1; attempt <= retries; attempt++) {
-      try {
-        const updateBalanceId = uuidv4();
-        const updateBalanceResponse =
-          await this.yandexService.updateDriverBalance(
-            parkId,
-            driverId,
-            amount,
-            updateBalanceId,
-          );
-
-        return updateBalanceResponse;
-      } catch (error: any) {
-        console.log('update driver balance error', error?.message);
-        if (attempt === retries) {
-          throw new Error('balance update', {
-            cause: error,
-          });
-        }
-        await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
     }
   }
@@ -289,7 +315,7 @@ export class TransactionService {
   }
 
   // create job for pay check
-  @Cron(CronExpression.EVERY_30_SECONDS)
+  @Cron(CronExpression.EVERY_MINUTE)
   async handlePendingTransactions() {
     const lastJobRunningHistoryEntity = await this.jobRunningHistoryRepository
       .createQueryBuilder('job')
@@ -315,6 +341,7 @@ export class TransactionService {
       startDate: new Date(),
       configKey: JobConfigEnum.WithdrawalStatusCheck,
       statusId: JobRunningStatusEnum.Running,
+      endDate: null,
     });
 
     const jobRunningHistoryEntity = await this.jobRunningHistoryRepository.save(
@@ -393,7 +420,7 @@ export class TransactionService {
         payCheckResponse.data?.status,
       );
 
-      // transaction did not reach provider. It needs to be repeated
+      // transaction did not reach provider. It needs to be repeated. May I delete it?
       if (payCheckResponse.errorCode === 3015) {
         // const payResponse = await this.executePay(request, transaction.id);
 
@@ -423,7 +450,7 @@ export class TransactionService {
           payResponse.data?.status === TransactionStatusEnum.Cancell
         ) {
           console.log('error - returning driver balance');
-          await this.updateDriverBalance(
+          await this.yandexService.updateDriverBalance(
             transaction.parkId,
             transaction.driverId,
             transaction.amount,
@@ -458,17 +485,27 @@ export class TransactionService {
           },
         );
 
+        await this.transactionRegistrationRepository.delete({
+          driverId: transaction.driverId,
+          parkId: transaction.parkId,
+        });
+
         return;
       }
 
       console.log('not success');
 
       // transaction failed
-      await this.updateDriverBalance(
+      await this.yandexService.updateDriverBalance(
         transaction.parkId,
         transaction.driverId,
         transaction.amount,
       );
+
+      await this.transactionRegistrationRepository.delete({
+        driverId: transaction.driverId,
+        parkId: transaction.parkId,
+      });
 
       await this.transactionRepository.update(
         { id: transaction.id },
@@ -543,6 +580,136 @@ export class TransactionService {
       ].includes(driverId)
     )
       return;
-    return this.updateDriverBalance(parkId, driverId, 5);
+    return this.yandexService.updateDriverBalance(parkId, driverId, 5);
+  }
+
+  @Cron(CronExpression.EVERY_MINUTE)
+  async handleBalanceRollback() {
+    const lastJobRunningHistoryEntity = await this.jobRunningHistoryRepository
+      .createQueryBuilder('job')
+      .where('job.configKey = :configKey', {
+        configKey: JobConfigEnum.BalanceRollBack,
+      })
+      .andWhere('job.startDate > :minDate', {
+        minDate: format(subDays(new Date(), 1), 'yyyy-MM-dd HH:mm:ss'),
+      })
+      .orderBy('job.startDate', 'DESC')
+      .getOne();
+
+    if (
+      lastJobRunningHistoryEntity?.statusId === JobRunningStatusEnum.Running
+    ) {
+      console.log(
+        'Previous handleBalanceRollback is still running -- skipping',
+      );
+      return;
+    }
+
+    const jobRunningHistoryObject = this.jobRunningHistoryRepository.create({
+      startDate: new Date(),
+      configKey: JobConfigEnum.BalanceRollBack,
+      statusId: JobRunningStatusEnum.Running,
+      endDate: null,
+    });
+
+    const jobRunningHistoryEntity = await this.jobRunningHistoryRepository.save(
+      jobRunningHistoryObject,
+    );
+
+    try {
+      let offset = 0;
+      const batchSize = 2;
+
+      const currentDate = format(new Date(), 'yyyy-MM-dd HH:mm:ss');
+      const minDate = format(subDays(new Date(), 1), 'yyyy-MM-dd HH:mm:ss');
+
+      while (true) {
+        const balanceRollback = await this.balanceRollbackRepository
+          .createQueryBuilder('balance')
+          .leftJoinAndSelect('balance.transaction', 'transaction')
+          .where('balance.createdAt > :minDate', {
+            minDate,
+          })
+          .andWhere('balance.createdAt < :maxDate', {
+            maxDate: currentDate,
+          })
+          .andWhere('balance.statusId IN (:...statuses)', {
+            statuses: [
+              BalanceRollbackStatusEnum.New,
+              BalanceRollbackStatusEnum.Error,
+            ],
+          })
+          .orderBy('balance.createdAt')
+          .skip(offset)
+          .take(batchSize)
+          .getMany();
+
+        console.log(
+          'balance rollback',
+          offset,
+          balanceRollback.map((item) => item.createdAt),
+        );
+
+        if (balanceRollback.length === 0) break;
+
+        await Promise.all(
+          balanceRollback.map((row) => this.balanceRollback(row)),
+        );
+
+        offset += batchSize;
+      }
+      await this.jobRunningHistoryRepository.update(
+        { id: jobRunningHistoryEntity.id },
+        {
+          statusId: JobRunningStatusEnum.Success,
+        },
+      );
+    } catch (error: any) {
+      this.logger.error(error);
+      await this.jobRunningHistoryRepository.update(
+        { id: jobRunningHistoryEntity.id },
+        {
+          statusId: JobRunningStatusEnum.Error,
+          error: error.message,
+        },
+      );
+    }
+  }
+  private async balanceRollback(balanceRollback: BalanceRollbackEntity) {
+    try {
+      await this.balanceRollbackRepository.update(
+        { id: balanceRollback.id },
+        {
+          statusId: BalanceRollbackStatusEnum.Processing,
+        },
+      );
+      await this.yandexService.updateDriverBalance(
+        balanceRollback.transaction.parkId,
+        balanceRollback.transaction.driverId,
+        balanceRollback.amount,
+      );
+
+      await this.balanceRollbackRepository.update(
+        { id: balanceRollback.id },
+        {
+          statusId: BalanceRollbackStatusEnum.Success,
+        },
+      );
+
+      await this.transactionRegistrationRepository.delete({
+        driverId: balanceRollback.transaction.driverId,
+        parkId: balanceRollback.transaction.parkId,
+      });
+    } catch (error) {
+      await this.balanceRollbackRepository.update(
+        { id: balanceRollback.id },
+        {
+          statusId: BalanceRollbackStatusEnum.Error,
+        },
+      );
+    }
   }
 }
+
+// თუ გატანა ან თანხის დაბრუნება დაერორდა, თანხა უკან უნდა დავაბრუნო ჯობით
+//

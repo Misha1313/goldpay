@@ -23,7 +23,7 @@ export class CreateTransactionTables1779182442871
                 CONSTRAINT "PK_bb95477ae48c741a9c1445babfd" PRIMARY KEY ("id")
             )
         `);
-  
+
     await queryRunner.query(`
             CREATE TABLE "transaction_status" (
                 "id" integer NOT NULL,

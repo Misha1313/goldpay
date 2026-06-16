@@ -8,6 +8,10 @@ import { TransactionEntity } from './entities/transaction.entity';
 import { TransactionStatusEntity } from './entities/transaction-status.entity';
 import { PaymentAccountEntity } from './entities/payment-account.entity';
 import { CommonModule } from '../common/common.module';
+import { TransactionRegistrationEntity } from './entities/transaction-registration.entity';
+import { BalanceRollbackEntity } from './entities/balance-rollback.entity';
+import { BalanceRollbackStatusEntity } from './entities/balance-rollback-status.entity';
+import { BalanceRollbackService } from './services/balance-rollback.service';
 
 @Module({
   imports: [
@@ -15,13 +19,16 @@ import { CommonModule } from '../common/common.module';
       TransactionEntity,
       TransactionStatusEntity,
       PaymentAccountEntity,
+      TransactionRegistrationEntity,
+      BalanceRollbackEntity,
+      BalanceRollbackStatusEntity,
     ]),
     YandexModule,
     PaymentModule,
-    CommonModule
+    CommonModule,
   ],
   controllers: [TransactionController],
-  providers: [TransactionService],
+  providers: [TransactionService, BalanceRollbackService],
   exports: [TransactionService],
 })
 export class TransactionModule {}

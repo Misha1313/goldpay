@@ -70,7 +70,7 @@ type PayCheckResponse = {
 
 @Injectable()
 export class PaymentService {
-  constructor(private readonly configService: ConfigService) { }
+  constructor(private readonly configService: ConfigService) {}
 
   async info(
     iban: string,
@@ -107,7 +107,6 @@ export class PaymentService {
 
     const hash = this.getHash(payload, requestDate);
 
-
     const headers = this.getHeaders(requestDate, hash);
 
     const config: AxiosRequestConfig = {
@@ -132,48 +131,51 @@ export class PaymentService {
     amount: number,
     transactionId: number,
   ): Promise<PayResponse> {
-    const url = this.configService.get<string>('PAYMENT_PAY_URL');
-
-    const payload: InfoRequest = {
-      amount: amount,
-      service_id: this.getServiceId(iban),
-      currency_id: TransactionCurrencyEnum.Gel,
-      transaction_id: transactionId.toString(),
-      service_params: {
-        iban: iban,
-        receiver_firstname: firstName,
-        receiver_lastname: lastName,
-        sender_firstname: this.configService.get<string>(
-          'PAYMENT_SENDER_FIRST_NAME',
-        ),
-        sender_lastname: this.configService.get<string>(
-          'PAYMENT_SENDER_LAST_NAME',
-        ),
-        personal_number: this.configService.get<string>(
-          'PAYMENT_SENDER_PERSONAL_NUMBER',
-        ),
-      },
-      instrument_id: 9,
-      additional_info: null,
-    };
-    const requestDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
-
-    const hash = this.getHash(payload, requestDate);
-
-    const headers = this.getHeaders(requestDate, hash);
-
-    const config: AxiosRequestConfig = {
-      headers,
-      timeout: this.configService.get<number>('PAYMENT_REQUEST_TIMEOUT'),
-    };
-
     try {
+      const url = this.configService.get<string>('PAYMENT_PAY_URL');
+
+      const payload: InfoRequest = {
+        amount: amount,
+        service_id: this.getServiceId(iban),
+        currency_id: TransactionCurrencyEnum.Gel,
+        transaction_id: transactionId.toString(),
+        service_params: {
+          iban: iban,
+          receiver_firstname: firstName,
+          receiver_lastname: lastName,
+          sender_firstname: this.configService.get<string>(
+            'PAYMENT_SENDER_FIRST_NAME',
+          ),
+          sender_lastname: this.configService.get<string>(
+            'PAYMENT_SENDER_LAST_NAME',
+          ),
+          personal_number: this.configService.get<string>(
+            'PAYMENT_SENDER_PERSONAL_NUMBER',
+          ),
+        },
+        instrument_id: 9,
+        additional_info: null,
+      };
+      const requestDate = new Date()
+        .toISOString()
+        .slice(0, 19)
+        .replace('T', ' ');
+
+      const hash = this.getHash(payload, requestDate);
+
+      const headers = this.getHeaders(requestDate, hash);
+
+      const config: AxiosRequestConfig = {
+        headers,
+        timeout: this.configService.get<number>('PAYMENT_REQUEST_TIMEOUT'),
+      };
+
       const response = await axios.post(url, payload, config);
 
       return response.data;
     } catch (error) {
       console.error('payment pay request failed:', error);
-      throw error;
+      throw new Error('PAY');
     }
   }
 
