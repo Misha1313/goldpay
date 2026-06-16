@@ -58,7 +58,8 @@ export class AuthService {
       sendOtpDto.parkId,
     );
 
-    if (!driverInfo) throw new UnauthorizedException('Invalid credentials');
+    if (!driverInfo?.driver_profile)
+      throw new UnauthorizedException('Invalid credentials');
 
     const Otp = this.generateOtp();
 
