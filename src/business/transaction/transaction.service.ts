@@ -13,21 +13,12 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TransactionEntity } from './entities/transaction.entity';
 import { WithdrawRequest } from './requests/withdraw.request';
-import { v4 as uuidv4 } from 'uuid';
 import { ConfigService } from '@nestjs/config';
 import { TransactionStatusEnum } from './enums/transaction-status.enum';
-import { TransactionCurrencyEnum } from './enums/transaction-curreny.enum';
-import { Cron, CronExpression } from '@nestjs/schedule';
-import { minDate } from 'class-validator';
-import { format, subDays, subHours } from 'date-fns';
+import { format, subHours } from 'date-fns';
 import { PaymentAccountEntity } from './entities/payment-account.entity';
-import { GetPaymentAccountsRequest } from './requests/get-payment-accounts.request';
 import { GetTransactionsRequest } from './requests/get-transactions.request';
 import { JwtPayload } from '../auth/auth.service';
-import { JobRunningHistoryEntity } from '../common/entities/job-running-history.entity';
-import { JobConfigEntity } from '../common/entities/job-config.entity';
-import { JobConfigEnum } from '../common/enums/job-config.enum';
-import { JobRunningStatusEnum } from '../common/enums/job-running-status.enum';
 import { TransactionRegistrationEntity } from './entities/transaction-registration.entity';
 import { BalanceRollbackEntity } from './entities/balance-rollback.entity';
 import { BalanceRollbackStatusEnum } from './enums/balance-rollback-status.enum';
@@ -43,8 +34,6 @@ export class TransactionService {
     private readonly configService: ConfigService,
     @InjectRepository(PaymentAccountEntity)
     private readonly paymentAccountRepository: Repository<PaymentAccountEntity>,
-    @InjectRepository(JobRunningHistoryEntity)
-    private readonly jobRunningHistoryRepository: Repository<JobRunningHistoryEntity>,
     @InjectRepository(TransactionRegistrationEntity)
     private readonly transactionRegistrationRepository: Repository<TransactionRegistrationEntity>,
     @InjectRepository(BalanceRollbackEntity)
@@ -53,6 +42,19 @@ export class TransactionService {
 
   async withdrawBalance(request: WithdrawRequest, jwtPayload: JwtPayload) {
     const { sub: driverId, parkId } = jwtPayload;
+
+    const lastHourSuccessTransaction = await this.getLastHourSuccessTransaction(
+      parkId,
+      driverId,
+    );
+
+    if (lastHourSuccessTransaction) {
+      console.log('Too many requests');
+      throw new UnprocessableEntityException({
+        errorCode: 'TOO_MANY_REQUESTS',
+        message: 'Too many requests',
+      });
+    }
 
     await this.fillTransactionRegistration(driverId, parkId);
 
@@ -177,7 +179,9 @@ export class TransactionService {
         });
       }
     } catch (error: any) {
-      if (error.message === 'TRANSACTION_IN_PROGRESS') {
+      if (
+        ['TRANSACTION_IN_PROGRESS', 'TOO_MANY_REQUESTS'].includes(error.message)
+      ) {
         throw error;
       }
 
@@ -267,6 +271,25 @@ export class TransactionService {
         console.log('executePay error');
       }
     }
+  }
+
+  private async getLastHourSuccessTransaction(
+    parkId: string,
+    driverId: string,
+  ) {
+    return this.transactionRepository
+      .createQueryBuilder('transaction')
+      .where('transaction.createdAt > :minDate', {
+        minDate: format(subHours(new Date(), 1), 'yyyy-MM-dd HH:mm:ss'),
+      })
+      .andWhere('transaction.parkId = :parkId', { parkId })
+      .andWhere('transaction.driverId = :driverId', {
+        driverId,
+      })
+      .andWhere('transaction.statusId = :statusId', {
+        statusId: TransactionStatusEnum.Success,
+      })
+      .getOne();
   }
 
   getUpdatedTransactionStatus(payResponse: PayResponse) {
@@ -362,6 +385,3 @@ export class TransactionService {
     return this.yandexService.updateDriverBalance(parkId, driverId, 5);
   }
 }
-
-// თუ გატანა ან თანხის დაბრუნება დაერორდა, თანხა უკან უნდა დავაბრუნო ჯობით
-//
