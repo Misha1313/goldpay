@@ -91,6 +91,14 @@ export class CreateTransactionTables1779182442871
         name: 'New',
       },
       {
+        id: 1,
+        name: 'Ready To Process',
+      },
+      {
+        id: 2,
+        name: 'Processing',
+      },
+      {
         id: 3,
         name: 'Status Check',
       },

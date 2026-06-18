@@ -36,8 +36,6 @@ export class TransactionService {
     private readonly paymentAccountRepository: Repository<PaymentAccountEntity>,
     @InjectRepository(TransactionRegistrationEntity)
     private readonly transactionRegistrationRepository: Repository<TransactionRegistrationEntity>,
-    @InjectRepository(BalanceRollbackEntity)
-    private readonly balanceRollbackRepository: Repository<BalanceRollbackEntity>,
   ) {}
 
   async withdrawBalance(request: WithdrawRequest, jwtPayload: JwtPayload) {
@@ -56,8 +54,6 @@ export class TransactionService {
       });
     }
 
-    await this.fillTransactionRegistration(driverId, parkId);
-
     const getBalanceResponse =
       await this.yandexService.getDriverBalance(driverId);
 
@@ -69,6 +65,8 @@ export class TransactionService {
         message: 'Insufficient balance',
       });
     }
+
+    await this.fillTransactionRegistration(driverId, parkId);
 
     // save in transactions table
     const newTransactionObject = this.transactionRepository.create({
@@ -85,36 +83,38 @@ export class TransactionService {
     const newTransactionEntity =
       await this.transactionRepository.save(newTransactionObject);
 
-    const infoResponse = await this.paymentService.info(
-      request.iban,
-      request.firstName,
-      request.lastName,
-      request.amount,
-      newTransactionEntity.id,
-    );
-
-    console.log(
-      'info response',
-      infoResponse.errorCode,
-      infoResponse.errorMessage,
-    );
-
-    // info returned error. payment can not be made
-    if (infoResponse.errorCode) {
-      await this.transactionRepository.update(
-        { id: newTransactionEntity.id },
-        {
-          statusId: TransactionStatusEnum.Cancell,
-          errorCode: infoResponse.errorCode,
-          errorMessage: infoResponse.errorMessage,
-        },
-      );
-      await this.transactionRegistrationRepository.delete({ driverId, parkId });
-      return;
-    }
-
-    // substract transaction amount from yandex balance
     try {
+      const infoResponse = await this.paymentService.info(
+        request.iban,
+        request.firstName,
+        request.lastName,
+        request.amount,
+        newTransactionEntity.id,
+      );
+
+      console.log(
+        'info response',
+        infoResponse.errorCode,
+        infoResponse.errorMessage,
+      );
+
+      // info returned error. payment can not be made
+      if (infoResponse.errorCode) {
+        await this.transactionRepository.update(
+          { id: newTransactionEntity.id },
+          {
+            statusId: TransactionStatusEnum.Cancell,
+            errorCode: infoResponse.errorCode,
+            errorMessage: infoResponse.errorMessage,
+          },
+        );
+        await this.transactionRegistrationRepository.delete({
+          driverId,
+          parkId,
+        });
+        return;
+      }
+
       const updateBalanceResponse =
         await this.yandexService.updateDriverBalance(
           parkId,
@@ -124,92 +124,27 @@ export class TransactionService {
 
       console.log('updateBalanceResponse', updateBalanceResponse);
 
-      const payResponse = await this.paymentService.pay(
-        request.iban,
-        request.firstName,
-        request.lastName,
-        request.amount,
-        newTransactionEntity.id,
-      );
-
-      console.log(
-        'pay response',
-        payResponse.errorCode,
-        payResponse.errorMessage,
-        payResponse.data,
-      );
-
-      const updatedTransactionStatus =
-        this.getUpdatedTransactionStatus(payResponse);
+      if (request.savePaymentAccount || request.setDefaultPaymentAccount) {
+        await this.savePaymentAccount(request, parkId, driverId);
+      }
 
       await this.transactionRepository.update(
         { id: newTransactionEntity.id },
         {
-          statusId: updatedTransactionStatus,
-          errorCode: payResponse.errorCode,
-          errorMessage: payResponse.errorMessage,
-          providerTransactionId: payResponse.data?.id,
+          statusId: TransactionStatusEnum.ReadyToProcess,
         },
       );
-
-      console.log('updatedTransactionStatus', updatedTransactionStatus);
-
-      if (
-        updatedTransactionStatus === TransactionStatusEnum.Success ||
-        updatedTransactionStatus === TransactionStatusEnum.Pending
-      ) {
-        if (request.savePaymentAccount || request.setDefaultPaymentAccount) {
-          await this.savePaymentAccount(request, parkId, driverId);
-        }
-      }
-
-      if (updatedTransactionStatus === TransactionStatusEnum.Cancell) {
-        console.log('trying updateDriverBalance');
-        await this.yandexService.updateDriverBalance(
-          parkId,
-          driverId,
-          request.amount,
-        );
-      }
-
-      if (updatedTransactionStatus !== TransactionStatusEnum.Pending) {
-        await this.transactionRegistrationRepository.delete({
-          driverId,
-          parkId,
-        });
-      }
     } catch (error: any) {
       if (
-        ['TRANSACTION_IN_PROGRESS', 'TOO_MANY_REQUESTS'].includes(error.message)
+        [
+          'TRANSACTION_IN_PROGRESS',
+          'TOO_MANY_REQUESTS',
+          'INSUFFICIENT_BALANCE',
+        ].includes(error.message)
       ) {
         throw error;
       }
 
-      if (error.message === 'INSUFFICIENT_BALANCE') {
-        await this.transactionRegistrationRepository.delete({
-          driverId,
-          parkId,
-        });
-        throw error;
-      }
-
-      if (['PAY', 'BALANCE_ROLLBACK'].includes(error.message)) {
-        // await this.transactionRepository.update(
-        //   { id: newTransactionEntity.id },
-        //   {
-        //     statusId: TransactionStatusEnum.Cancell,
-        //     balanceUpdateErrorCode: error?.response?.data?.code,
-        //     balanceUpdateErrorMessage: error?.response?.data?.message,
-        //   },
-        // );
-        const balanceRollbackObject = this.balanceRollbackRepository.create({
-          id: newTransactionEntity.id,
-          createdAt: newTransactionEntity.createdAt,
-          statusId: BalanceRollbackStatusEnum.New,
-          amount: newTransactionEntity.amount,
-        });
-        await this.balanceRollbackRepository.insert(balanceRollbackObject);
-      }
       await this.transactionRepository.update(
         { id: newTransactionEntity.id },
         {
@@ -221,6 +156,8 @@ export class TransactionService {
         driverId,
         parkId,
       });
+
+      throw error;
     }
   }
 

@@ -16,8 +16,8 @@ import { TransactionEntity } from '../entities/transaction.entity';
 import { TransactionService } from '../transaction.service';
 
 @Injectable()
-export class CheckPaymentService {
-  private readonly logger = new Logger(CheckPaymentService.name);
+export class ProcessWithdrawalService {
+  private readonly logger = new Logger(ProcessWithdrawalService.name);
   constructor(
     private readonly yandexService: YandexService,
     private readonly paymentService: PaymentService,
@@ -32,12 +32,12 @@ export class CheckPaymentService {
     private readonly balanceRollbackRepository: Repository<BalanceRollbackEntity>,
   ) {}
 
-  @Cron(CronExpression.EVERY_MINUTE)
-  async handlePendingTransactions() {
+  @Cron(CronExpression.EVERY_30_SECONDS)
+  async runProcessWithdrawal() {
     const lastJobRunningHistoryEntity = await this.jobRunningHistoryRepository
       .createQueryBuilder('job')
       .where('job.configKey = :configKey', {
-        configKey: JobConfigEnum.WithdrawalStatusCheck,
+        configKey: JobConfigEnum.WithdrawalProcessing,
       })
       .andWhere('job.startDate > :minDate', {
         minDate: format(subDays(new Date(), 1), 'yyyy-MM-dd HH:mm:ss'),
@@ -48,15 +48,13 @@ export class CheckPaymentService {
     if (
       lastJobRunningHistoryEntity?.statusId === JobRunningStatusEnum.Running
     ) {
-      console.log(
-        'Previous handlePendingTransactions is still running -- skipping',
-      );
+      console.log('Previous processWithdrawal is still running -- skipping');
       return;
     }
 
     const jobRunningHistoryObject = this.jobRunningHistoryRepository.create({
       startDate: new Date(),
-      configKey: JobConfigEnum.WithdrawalStatusCheck,
+      configKey: JobConfigEnum.WithdrawalProcessing,
       statusId: JobRunningStatusEnum.Running,
       endDate: null,
     });
@@ -81,8 +79,8 @@ export class CheckPaymentService {
           .andWhere('transaction.createdAt < :maxDate', {
             maxDate: currentDate,
           })
-          .andWhere('transaction.statusId = :pendingStatus', {
-            pendingStatus: TransactionStatusEnum.Pending,
+          .andWhere('transaction.statusId = :statusId', {
+            statusId: TransactionStatusEnum.ReadyToProcess,
           })
           .orderBy('transaction.createdAt')
           .skip(offset)
@@ -90,14 +88,16 @@ export class CheckPaymentService {
           .getMany();
 
         console.log(
-          'check transactions status',
+          'process withdrawal',
           offset,
           transactions.map((item) => item.createdAt),
         );
 
         if (transactions.length === 0) break;
 
-        await Promise.all(transactions.map((row) => this.payCheck(row)));
+        await Promise.all(
+          transactions.map((row) => this.processWithdrawal(row)),
+        );
 
         offset += batchSize;
       }
@@ -119,121 +119,71 @@ export class CheckPaymentService {
     }
   }
 
-  private async payCheck(transaction: TransactionEntity) {
+  private async processWithdrawal(transaction: TransactionEntity) {
     try {
       await this.transactionRepository.update(
         { id: transaction.id },
         {
-          statusId: TransactionStatusEnum.StatusCheck,
+          statusId: TransactionStatusEnum.Processing,
         },
       );
 
-      const payCheckResponse = await this.paymentService.payCheck(
+      const payResponse = await this.paymentService.pay(
+        transaction.iban,
+        transaction.receiverFirstName,
+        transaction.receiverLastName,
+        transaction.amount,
         transaction.id,
       );
+
       console.log(
-        'errorCode',
-        payCheckResponse.errorCode,
-        payCheckResponse.data?.status,
+        'pay response',
+        payResponse.errorCode,
+        payResponse.errorMessage,
+        payResponse.data,
       );
 
-      // transaction did not reach provider. It needs to be repeated. May I delete it?
-      if (payCheckResponse.errorCode === 3015) {
-        // const payResponse = await this.executePay(request, transaction.id);
+      const updatedTransactionStatus =
+        this.transactionService.getUpdatedTransactionStatus(payResponse);
 
-        const payResponse = await this.paymentService.pay(
-          transaction.iban,
-          transaction.receiverFirstName,
-          transaction.receiverLastName,
+      console.log('updatedTransactionStatus', updatedTransactionStatus);
+
+      // if (
+      //   updatedTransactionStatus === TransactionStatusEnum.Success ||
+      //   updatedTransactionStatus === TransactionStatusEnum.Pending
+      // ) {
+      //   if (request.savePaymentAccount || request.setDefaultPaymentAccount) {
+      //     await this.savePaymentAccount(request, parkId, driverId);
+      //   }
+      // }
+
+      if (updatedTransactionStatus === TransactionStatusEnum.Cancell) {
+        console.log('trying updateDriverBalance');
+        await this.yandexService.updateDriverBalance(
+          transaction.parkId,
+          transaction.driverId,
           transaction.amount,
-          transaction.id,
         );
-
-        const updatedTransactionStatus =
-          this.transactionService.getUpdatedTransactionStatus(payResponse);
-
-        await this.transactionRepository.update(
-          { id: transaction.id },
-          {
-            statusId: updatedTransactionStatus,
-            errorCode: payResponse.errorCode,
-            errorMessage: payResponse.errorMessage,
-          },
-        );
-
-        // transaction failed
-        if (
-          payResponse.errorCode !== 0 ||
-          payResponse.data?.status === TransactionStatusEnum.Cancell
-        ) {
-          console.log('error - returning driver balance');
-          await this.yandexService.updateDriverBalance(
-            transaction.parkId,
-            transaction.driverId,
-            transaction.amount,
-          );
-        }
-        return;
       }
-      console.log('not 3015');
-
-      // transaction is still in pending state or provider service is temporary not available
-      if (
-        payCheckResponse.data?.status === TransactionStatusEnum.Pending ||
-        [3003, 9000, 9999].includes(payCheckResponse.errorCode)
-      ) {
-        await this.transactionRepository.update(
-          { id: transaction.id },
-          {
-            statusId: TransactionStatusEnum.Pending,
-          },
-        );
-        return;
-      }
-
-      console.log('not pending');
-
-      // transaction is success
-      if (payCheckResponse.data?.status === TransactionStatusEnum.Success) {
-        await this.transactionRepository.update(
-          { id: transaction.id },
-          {
-            statusId: TransactionStatusEnum.Success,
-          },
-        );
-
-        await this.transactionRegistrationRepository.delete({
-          driverId: transaction.driverId,
-          parkId: transaction.parkId,
-        });
-
-        return;
-      }
-
-      console.log('not success');
-
-      // transaction failed
-      await this.yandexService.updateDriverBalance(
-        transaction.parkId,
-        transaction.driverId,
-        transaction.amount,
-      );
-
-      await this.transactionRegistrationRepository.delete({
-        driverId: transaction.driverId,
-        parkId: transaction.parkId,
-      });
 
       await this.transactionRepository.update(
         { id: transaction.id },
         {
-          statusId: TransactionStatusEnum.Cancell,
-          errorCode: payCheckResponse.errorCode,
-          errorMessage: payCheckResponse.errorMessage,
+          statusId: updatedTransactionStatus,
+          errorCode: payResponse.errorCode,
+          errorMessage: payResponse.errorMessage,
+          providerTransactionId: payResponse.data?.id,
         },
       );
+
+      if (updatedTransactionStatus !== TransactionStatusEnum.Pending) {
+        await this.transactionRegistrationRepository.delete({
+          driverId: transaction.driverId,
+          parkId: transaction.parkId,
+        });
+      }
     } catch (error: any) {
-      if (['BALANCE_ROLLBACK'].includes(error.message)) {
+      if (['PAY', 'BALANCE_ROLLBACK'].includes(error.message)) {
         const balanceRollbackObject = this.balanceRollbackRepository.create({
           id: transaction.id,
           createdAt: transaction.createdAt,

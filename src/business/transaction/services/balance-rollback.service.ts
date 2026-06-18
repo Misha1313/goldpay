@@ -59,7 +59,7 @@ export class BalanceRollbackService {
 
     try {
       let offset = 0;
-      const batchSize = 2;
+      const batchSize = 50;
 
       const currentDate = format(new Date(), 'yyyy-MM-dd HH:mm:ss');
       const minDate = format(subDays(new Date(), 1), 'yyyy-MM-dd HH:mm:ss');
