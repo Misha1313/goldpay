@@ -112,7 +112,7 @@ export class TransactionService {
           driverId,
           parkId,
         });
-        return;
+        throw new Error('Info');
       }
 
       const updateBalanceResponse =
