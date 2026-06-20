@@ -131,70 +131,18 @@ export class CheckPaymentService {
       const payCheckResponse = await this.paymentService.payCheck(
         transaction.id,
       );
+
       console.log(
         'errorCode',
         payCheckResponse.errorCode,
         payCheckResponse.data?.status,
       );
 
-      // transaction did not reach provider. It needs to be repeated. May I delete it?
-      if (payCheckResponse.errorCode === 3015) {
-        // const payResponse = await this.executePay(request, transaction.id);
-
-        const payResponse = await this.paymentService.pay(
-          transaction.iban,
-          transaction.receiverFirstName,
-          transaction.receiverLastName,
-          transaction.amount,
-          transaction.id,
-        );
-
-        const updatedTransactionStatus =
-          this.transactionService.getUpdatedTransactionStatus(payResponse);
-
-        await this.transactionRepository.update(
-          { id: transaction.id },
-          {
-            statusId: updatedTransactionStatus,
-            errorCode: payResponse.errorCode,
-            errorMessage: payResponse.errorMessage,
-          },
-        );
-
-        // transaction failed
-        if (
-          payResponse.errorCode !== 0 ||
-          payResponse.data?.status === TransactionStatusEnum.Cancell
-        ) {
-          console.log('error - returning driver balance');
-          await this.yandexService.updateDriverBalance(
-            transaction.parkId,
-            transaction.driverId,
-            transaction.amount,
-          );
-        }
-        return;
-      }
-      console.log('not 3015');
-
-      // transaction is still in pending state or provider service is temporary not available
-      if (
-        payCheckResponse.data?.status === TransactionStatusEnum.Pending ||
-        [3003, 9000, 9999].includes(payCheckResponse.errorCode)
-      ) {
-        await this.transactionRepository.update(
-          { id: transaction.id },
-          {
-            statusId: TransactionStatusEnum.Pending,
-          },
-        );
-        return;
-      }
-
-      console.log('not pending');
-
       // transaction is success
-      if (payCheckResponse.data?.status === TransactionStatusEnum.Success) {
+      if (
+        payCheckResponse.errorCode === 0 &&
+        payCheckResponse.data?.status === TransactionStatusEnum.Success
+      ) {
         await this.transactionRepository.update(
           { id: transaction.id },
           {
@@ -213,23 +161,40 @@ export class CheckPaymentService {
       console.log('not success');
 
       // transaction failed
-      await this.yandexService.updateDriverBalance(
-        transaction.parkId,
-        transaction.driverId,
-        transaction.amount,
-      );
+      if (
+        (payCheckResponse.errorCode === 0 &&
+          payCheckResponse.data?.status === TransactionStatusEnum.Cancell) ||
+        payCheckResponse.errorCode === 3015
+      ) {
+        await this.yandexService.updateDriverBalance(
+          transaction.parkId,
+          transaction.driverId,
+          transaction.amount,
+        );
 
-      await this.transactionRegistrationRepository.delete({
-        driverId: transaction.driverId,
-        parkId: transaction.parkId,
-      });
+        await this.transactionRegistrationRepository.delete({
+          driverId: transaction.driverId,
+          parkId: transaction.parkId,
+        });
+
+        await this.transactionRepository.update(
+          { id: transaction.id },
+          {
+            statusId: TransactionStatusEnum.Cancell,
+            errorCode: payCheckResponse.errorCode,
+            errorMessage: payCheckResponse.errorMessage,
+          },
+        );
+
+        return;
+      }
+
+      console.log('not fail');
 
       await this.transactionRepository.update(
         { id: transaction.id },
         {
-          statusId: TransactionStatusEnum.Cancell,
-          errorCode: payCheckResponse.errorCode,
-          errorMessage: payCheckResponse.errorMessage,
+          statusId: TransactionStatusEnum.Pending,
         },
       );
     } catch (error: any) {
@@ -246,6 +211,7 @@ export class CheckPaymentService {
         { id: transaction.id },
         {
           statusId: TransactionStatusEnum.Cancell,
+          errorMessage: error.message,
         },
       );
 

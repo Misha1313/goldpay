@@ -24,7 +24,7 @@ export class BalanceRollbackService {
     private readonly balanceRollbackRepository: Repository<BalanceRollbackEntity>,
   ) {}
 
-  @Cron(CronExpression.EVERY_MINUTE)
+  @Cron(CronExpression.EVERY_30_SECONDS)
   async handleBalanceRollback() {
     const lastJobRunningHistoryEntity = await this.jobRunningHistoryRepository
       .createQueryBuilder('job')
@@ -75,10 +75,7 @@ export class BalanceRollbackService {
             maxDate: currentDate,
           })
           .andWhere('balance.statusId IN (:...statuses)', {
-            statuses: [
-              BalanceRollbackStatusEnum.New,
-              BalanceRollbackStatusEnum.Error,
-            ],
+            statuses: [BalanceRollbackStatusEnum.New],
           })
           .orderBy('balance.createdAt')
           .skip(offset)
@@ -141,11 +138,15 @@ export class BalanceRollbackService {
         driverId: balanceRollback.transaction.driverId,
         parkId: balanceRollback.transaction.parkId,
       });
-    } catch (error) {
+    } catch (error: any) {
       await this.balanceRollbackRepository.update(
         { id: balanceRollback.id },
         {
-          statusId: BalanceRollbackStatusEnum.Error,
+          statusId:
+            error.message === 'BALANCE_ROLLBACK'
+              ? BalanceRollbackStatusEnum.New
+              : BalanceRollbackStatusEnum.Error,
+          errorMessage: error.message,
         },
       );
     }

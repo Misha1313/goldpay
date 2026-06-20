@@ -148,15 +148,6 @@ export class ProcessWithdrawalService {
 
       console.log('updatedTransactionStatus', updatedTransactionStatus);
 
-      // if (
-      //   updatedTransactionStatus === TransactionStatusEnum.Success ||
-      //   updatedTransactionStatus === TransactionStatusEnum.Pending
-      // ) {
-      //   if (request.savePaymentAccount || request.setDefaultPaymentAccount) {
-      //     await this.savePaymentAccount(request, parkId, driverId);
-      //   }
-      // }
-
       if (updatedTransactionStatus === TransactionStatusEnum.Cancell) {
         console.log('trying updateDriverBalance');
         await this.yandexService.updateDriverBalance(
@@ -196,6 +187,7 @@ export class ProcessWithdrawalService {
         { id: transaction.id },
         {
           statusId: TransactionStatusEnum.Cancell,
+          errorMessage: error.message,
         },
       );
 
