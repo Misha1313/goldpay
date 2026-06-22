@@ -54,8 +54,10 @@ export class TransactionService {
       });
     }
 
-    const getBalanceResponse =
-      await this.yandexService.getDriverBalance(driverId);
+    const getBalanceResponse = await this.yandexService.getDriverBalance(
+      driverId,
+      'withdrawBalance',
+    );
 
     // TODO - send error code
     if (getBalanceResponse.balance < request.amount) {
@@ -120,6 +122,8 @@ export class TransactionService {
           parkId,
           driverId,
           -request.amount,
+          'withdrawBalance',
+          newTransactionObject.id,
         );
 
       console.log('updateBalanceResponse', updateBalanceResponse);
@@ -319,6 +323,11 @@ export class TransactionService {
       ].includes(driverId)
     )
       return;
-    return this.yandexService.updateDriverBalance(parkId, driverId, 5);
+    return this.yandexService.updateDriverBalance(
+      parkId,
+      driverId,
+      5,
+      'refillBalance-dev',
+    );
   }
 }

@@ -7,27 +7,30 @@ export type DriverInfo = {
   firstName: string;
   lastName: string;
   balance: number;
-}
+};
 
 @Injectable()
 export class DriverService {
   constructor(private readonly yandexService: YandexService) {}
 
   async getDriverBalance(JwtPayload: JwtPayload) {
-    const response = await this.yandexService.getDriverBalance(JwtPayload.sub);
+    const response = await this.yandexService.getDriverBalance(
+      JwtPayload.sub,
+      'getDriverBalance',
+    );
     return response.balance;
   }
 
   async getDriverInfo(JwtPayload: JwtPayload): Promise<DriverInfo> {
     const [balance, profile] = await Promise.all([
-      this.yandexService.getDriverBalance(JwtPayload.sub),
-      this.yandexService.getDriverProfile(JwtPayload.sub)
-    ])
+      this.yandexService.getDriverBalance(JwtPayload.sub, 'getDriverInfo'),
+      this.yandexService.getDriverProfile(JwtPayload.sub),
+    ]);
     return {
       firstName: profile.person.full_name.first_name,
       lastName: profile.person.full_name.last_name,
-      balance: balance.balance
-    }
+      balance: balance.balance,
+    };
   }
 
   async getDriverByPhone(phoneNumber: string, parkId: string) {

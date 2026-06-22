@@ -9,6 +9,8 @@ import { PaymentAccountEntity } from 'src/business/transaction/entities/payment-
 import { TransactionRegistrationEntity } from 'src/business/transaction/entities/transaction-registration.entity';
 import { TransactionStatusEntity } from 'src/business/transaction/entities/transaction-status.entity';
 import { TransactionEntity } from 'src/business/transaction/entities/transaction.entity';
+import { YandexLogEntity } from '../yandex/yandex-log.entity';
+import { PaymentLogEntity } from '../payment/payment-log.entity';
 
 export const entities = [
   AuthEntity,
@@ -22,4 +24,6 @@ export const entities = [
   TransactionRegistrationEntity,
   BalanceRollbackEntity,
   BalanceRollbackStatusEntity,
+  YandexLogEntity,
+  PaymentLogEntity,
 ];

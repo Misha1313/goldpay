@@ -170,6 +170,8 @@ export class CheckPaymentService {
           transaction.parkId,
           transaction.driverId,
           transaction.amount,
+          'payCheck',
+          transaction.id,
         );
 
         await this.transactionRegistrationRepository.delete({

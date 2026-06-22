@@ -1,8 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InjectRepository } from '@nestjs/typeorm';
 import axios, { AxiosRequestConfig } from 'axios';
 import { WithdrawRequest } from 'src/business/transaction/requests/withdraw.request';
 import { v4 as uuidv4 } from 'uuid';
+import { YandexLogEntity } from './yandex-log.entity';
+import { Repository } from 'typeorm';
 
 export type DriversProfilesQuery = {
   id: string;
@@ -36,11 +39,31 @@ export class YandexService {
   private X_CLIENT_ID = this.configService.get<string>('X_CLIENT_ID');
   private X_PARK_ID = this.configService.get<string>('X_PARK_ID');
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    @InjectRepository(YandexLogEntity)
+    private readonly yandexLogRepository: Repository<YandexLogEntity>,
+  ) {}
 
-  async getDriverBalance(driverId: string) {
+  async getDriverBalance(
+    driverId: string,
+    process: string,
+    transactionId?: number,
+  ) {
     const retries = Number(this.configService.get<number>('RETRY_NUMBER'));
     const delayMs = Number(this.configService.get<number>('RETRY_INTERVAL'));
+
+    const yandexLogObject = this.yandexLogRepository.create({
+      createdAt: new Date(),
+      driverId,
+      process,
+      method: 'getDriverBalance',
+      request: { driverId },
+      transactionId,
+      parkId: this.X_PARK_ID,
+    });
+    const yandexLogEntity =
+      await this.yandexLogRepository.save(yandexLogObject);
 
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
@@ -61,6 +84,14 @@ export class YandexService {
 
         console.log('getDriverBalanceResponse', response.data);
 
+        await this.yandexLogRepository.update(
+          { id: yandexLogEntity.id },
+          {
+            response: response.data,
+            httpStatus: response.status,
+          },
+        );
+
         return response.data;
       } catch (error: any) {
         console.log('getDriverBalance error:', error.message);
@@ -68,6 +99,13 @@ export class YandexService {
           await new Promise((resolve) => setTimeout(resolve, delayMs));
           continue;
         }
+        await this.yandexLogRepository.update(
+          { id: yandexLogEntity.id },
+          {
+            error: error.message,
+            httpStatus: error.response?.status,
+          },
+        );
         throw error;
       }
     }
@@ -140,9 +178,27 @@ export class YandexService {
     }
   }
 
-  async updateDriverBalance(parkId: string, driverId: string, amount: number) {
+  async updateDriverBalance(
+    parkId: string,
+    driverId: string,
+    amount: number,
+    process: string,
+    transactionId?: number,
+  ) {
     const retries = Number(this.configService.get<number>('RETRY_NUMBER'));
     const delayMs = Number(this.configService.get<number>('RETRY_INTERVAL'));
+
+    const yandexLogObject = this.yandexLogRepository.create({
+      createdAt: new Date(),
+      driverId,
+      process,
+      method: 'updateDriverBalance',
+      request: { driverId, amount },
+      transactionId,
+      parkId: this.X_PARK_ID,
+    });
+    const yandexLogEntity =
+      await this.yandexLogRepository.save(yandexLogObject);
 
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
@@ -172,10 +228,25 @@ export class YandexService {
 
         const response = await axios.post(url, payload, config);
 
+        await this.yandexLogRepository.update(
+          { id: yandexLogEntity.id },
+          {
+            response: response.data,
+            httpStatus: response.status,
+          },
+        );
+
         return response.data;
       } catch (error: any) {
         console.log('update driver balance error', error?.message);
         if (attempt === retries) {
+          await this.yandexLogRepository.update(
+            { id: yandexLogEntity.id },
+            {
+              error: error.message,
+              httpStatus: error.response?.status,
+            },
+          );
           const errorType =
             amount > 0 ? 'BALANCE_WITHDRAWAL' : 'BALANCE_ROLLBACK';
           throw new Error(errorType);

@@ -125,6 +125,8 @@ export class BalanceRollbackService {
         balanceRollback.transaction.parkId,
         balanceRollback.transaction.driverId,
         balanceRollback.amount,
+        'balanceRollback',
+        balanceRollback.transaction.id,
       );
 
       await this.balanceRollbackRepository.update(

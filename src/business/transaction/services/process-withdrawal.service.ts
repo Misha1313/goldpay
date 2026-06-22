@@ -33,7 +33,7 @@ export class ProcessWithdrawalService {
   ) {}
 
   @Cron(CronExpression.EVERY_30_SECONDS)
-  async runProcessWithdrawal() {
+  async handleProcessWithdrawal() {
     const lastJobRunningHistoryEntity = await this.jobRunningHistoryRepository
       .createQueryBuilder('job')
       .where('job.configKey = :configKey', {
@@ -149,11 +149,13 @@ export class ProcessWithdrawalService {
       console.log('updatedTransactionStatus', updatedTransactionStatus);
 
       if (updatedTransactionStatus === TransactionStatusEnum.Cancell) {
-        console.log('trying updateDriverBalance');
+        console.log('trying balance rollback');
         await this.yandexService.updateDriverBalance(
           transaction.parkId,
           transaction.driverId,
           transaction.amount,
+          'processWithdrawal',
+          transaction.id,
         );
       }
 
