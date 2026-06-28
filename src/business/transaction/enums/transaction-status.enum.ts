@@ -2,8 +2,8 @@ export enum TransactionStatusEnum {
   New = 0,
   ReadyToProcess = 1,
   Processing = 2,
-  StatusCheck = 3,
-  Pending = 100,
-  Success = 1000,
-  Cancell = 9999,
+  Pending = 3,
+  StatusCheck = 4,
+  Success = 5,
+  Error = 6,
 }

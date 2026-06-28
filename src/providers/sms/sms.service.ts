@@ -26,8 +26,8 @@ export class SmsService {
     try {
       const response = await axios.get(url, config);
       return response.data;
-    } catch (error) {
-      console.error('Sms send request failed:', error.response.data);
+    } catch (error: any) {
+      console.error('Sms send request failed:', error.response?.data);
       // if (error.response.status === 404) {
       //   throw new NotFoundException('Contractor not found');
       // }

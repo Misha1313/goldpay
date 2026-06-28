@@ -6,6 +6,8 @@ import { WithdrawRequest } from 'src/business/transaction/requests/withdraw.requ
 import { v4 as uuidv4 } from 'uuid';
 import { YandexLogEntity } from './yandex-log.entity';
 import { Repository } from 'typeorm';
+import { DriverBalanceUpdateDescriptionEnum } from 'src/business/common/enums/driver-balance-update-description.enum';
+import { AppError } from 'src/business/utils/app-error';
 
 export type DriversProfilesQuery = {
   id: string;
@@ -33,6 +35,31 @@ export type UpdateDriverBalanceErrorResponse = {
   message: string;
 };
 
+export type GetTransactionsResponse = {
+  transactions: [
+    {
+      id: string;
+      event_at: string;
+      category_id: string;
+      category_name: string;
+      amount: string;
+      currency_code: string;
+      description: string;
+      created_by: {
+        identity: string;
+        passport_uid: string;
+        dispatcher_id: string;
+        dispatcher_name: string;
+      };
+      driver_profile_id: string;
+      order_id: string;
+      event_id: string;
+    },
+  ];
+  limit: number;
+  cursor: string;
+};
+
 @Injectable()
 export class YandexService {
   private X_API_KEY = this.configService.get<string>('X_API_KEY');
@@ -48,7 +75,7 @@ export class YandexService {
   async getDriverBalance(
     driverId: string,
     process: string,
-    transactionId?: number,
+    transactionId?: string,
   ) {
     const retries = Number(this.configService.get<number>('RETRY_NUMBER'));
     const delayMs = Number(this.configService.get<number>('RETRY_INTERVAL'));
@@ -106,7 +133,7 @@ export class YandexService {
             httpStatus: error.response?.status,
           },
         );
-        throw error;
+        throw new AppError(error.message, 'GET_DRIVER_BALANCE');
       }
     }
   }
@@ -128,9 +155,9 @@ export class YandexService {
     try {
       const response = await axios.get(url, config);
       return response.data;
-    } catch (error) {
-      console.error('getDriverBalance request failed:', error.response.data);
-      if (error.response.status === 404) {
+    } catch (error: any) {
+      console.error('getDriverBalance request failed:', error.response?.data);
+      if (error.response?.status === 404) {
         throw new NotFoundException('Contractor not found');
       }
       throw error;
@@ -145,18 +172,6 @@ export class YandexService {
       query: {
         park: query,
       },
-      // {
-      //   park: {
-      //     id: '4d98e8bc5e1b4787885eeb3dcfaa7cd1',
-      //     driver_profile: {
-      //       work_status: ['working'],
-      //     },
-      //   },
-      // },
-      // fields: {
-      //   driver_profile: ['first_name', 'last_name', 'id'],
-      // },
-      // limit: 3,
     };
 
     const headers = {
@@ -172,7 +187,7 @@ export class YandexService {
     try {
       const response = await axios.post(url, payload, config);
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       console.error('POST request failed:', error.message);
       throw error;
     }
@@ -183,17 +198,28 @@ export class YandexService {
     driverId: string,
     amount: number,
     process: string,
-    transactionId?: number,
+    transactionId?: string,
   ) {
     const retries = Number(this.configService.get<number>('RETRY_NUMBER'));
     const delayMs = Number(this.configService.get<number>('RETRY_INTERVAL'));
+
+    const payload = {
+      park_id: parkId,
+      driver_profile_id: driverId,
+      category_id: 'partner_service_manual',
+      amount: amount.toString(),
+      description:
+        amount < 0
+          ? DriverBalanceUpdateDescriptionEnum.BalanceWithdrawal
+          : DriverBalanceUpdateDescriptionEnum.BalanceRollback,
+    };
 
     const yandexLogObject = this.yandexLogRepository.create({
       createdAt: new Date(),
       driverId,
       process,
       method: 'updateDriverBalance',
-      request: { driverId, amount },
+      request: payload,
       transactionId,
       parkId: this.X_PARK_ID,
     });
@@ -206,14 +232,6 @@ export class YandexService {
 
         const url =
           'https://fleet-api.taxi.yandex.net/v2/parks/driver-profiles/transactions';
-
-        const payload = {
-          park_id: parkId,
-          driver_profile_id: driverId,
-          category_id: 'partner_service_manual',
-          amount: amount.toString(),
-          description: 'withdraw balance',
-        };
 
         const headers = {
           'X-API-Key': this.X_API_KEY,
@@ -247,12 +265,84 @@ export class YandexService {
               httpStatus: error.response?.status,
             },
           );
-          const errorType =
-            amount > 0 ? 'BALANCE_WITHDRAWAL' : 'BALANCE_ROLLBACK';
-          throw new Error(errorType);
+          const errorCode =
+            amount < 0 ? 'BALANCE_WITHDRAWAL' : 'BALANCE_ROLLBACK';
+          throw new AppError(error.message, errorCode);
         }
         await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
+    }
+  }
+
+  async getTransactions(
+    driverId: string,
+    dateFrom: Date,
+    dateTo: Date,
+    process: string,
+    transactionId: string,
+  ): Promise<GetTransactionsResponse> {
+    const url =
+      'https://fleet-api.taxi.yandex.net/v2/parks/driver-profiles/transactions/list';
+
+    const payload = {
+      query: {
+        park: {
+          id: this.X_PARK_ID,
+          driver_profile: {
+            id: driverId,
+          },
+          transaction: {
+            event_at: {
+              from: dateFrom,
+              to: dateTo,
+            },
+          },
+        },
+      },
+    };
+
+    const yandexLogObject = this.yandexLogRepository.create({
+      createdAt: new Date(),
+      driverId,
+      process,
+      method: 'getTransactions',
+      request: payload,
+      transactionId,
+      parkId: this.X_PARK_ID,
+    });
+    const yandexLogEntity =
+      await this.yandexLogRepository.save(yandexLogObject);
+
+    const headers = {
+      'X-API-Key': this.X_API_KEY,
+      'X-Client-ID': this.X_CLIENT_ID,
+    };
+
+    const config: AxiosRequestConfig = {
+      headers,
+      timeout: 10000, // optional
+    };
+
+    try {
+      const response = await axios.post(url, payload, config);
+      await this.yandexLogRepository.update(
+        { id: yandexLogEntity.id },
+        {
+          response: response.data,
+          httpStatus: response.status,
+        },
+      );
+      return response.data;
+    } catch (error: any) {
+      console.error('POST request failed:', error.message);
+      await this.yandexLogRepository.update(
+        { id: yandexLogEntity.id },
+        {
+          error: error.message,
+          httpStatus: error.response?.status,
+        },
+      );
+      throw new AppError(error.message, 'GET_TRANSACTIONS');
     }
   }
 }

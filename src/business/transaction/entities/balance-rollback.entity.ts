@@ -2,6 +2,7 @@ import {
   BeforeInsert,
   BeforeUpdate,
   Column,
+  CreateDateColumn,
   Entity,
   Index,
   JoinColumn,
@@ -20,10 +21,10 @@ import { TransactionEntity } from './transaction.entity';
 })
 export class BalanceRollbackEntity {
   @PrimaryColumn()
-  id: number;
+  transactionId: string;
 
   @PrimaryColumn()
-  createdAt: Date;
+  transactionDate: Date;
 
   @Index()
   @Column()
@@ -33,10 +34,19 @@ export class BalanceRollbackEntity {
   amount: number;
 
   @Column({ nullable: true })
+  errorCode: string;
+
+  @Column({ nullable: true })
   errorMessage: string;
+
+  @CreateDateColumn()
+  createdAt: Date;
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @Column({ default: 0 })
+  tryCount: number;
 
   @ManyToOne((type) => BalanceRollbackStatusEntity)
   @JoinColumn({ name: 'status_id' })
@@ -44,8 +54,8 @@ export class BalanceRollbackEntity {
 
   @OneToOne(() => TransactionEntity)
   @JoinColumn([
-    { name: 'id', referencedColumnName: 'id' },
-    { name: 'created_at', referencedColumnName: 'createdAt' },
+    { name: 'transaction_id', referencedColumnName: 'id' },
+    { name: 'transaction_date', referencedColumnName: 'createdAt' },
   ])
   transaction: TransactionEntity;
 }

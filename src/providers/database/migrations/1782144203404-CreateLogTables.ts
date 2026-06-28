@@ -9,7 +9,7 @@ export class CreateLogTables1782144203404 implements MigrationInterface {
             CREATE TABLE "yandex_log" (
                 "id" SERIAL NOT NULL,
                 "created_at" TIMESTAMP NOT NULL,
-                "transaction_id" integer,
+                "transaction_id" character varying,
                 "driver_id" character varying,
                 "process" character varying,
                 "method" character varying NOT NULL,
@@ -27,7 +27,7 @@ export class CreateLogTables1782144203404 implements MigrationInterface {
             CREATE TABLE "payment_log" (
                 "id" SERIAL NOT NULL,
                 "created_at" TIMESTAMP NOT NULL,
-                "transaction_id" integer,
+                "transaction_id" character varying,
                 "method" character varying NOT NULL,
                 "http_status" integer,
                 "request" jsonb,

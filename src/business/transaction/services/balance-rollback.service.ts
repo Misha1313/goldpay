@@ -10,12 +10,15 @@ import { BalanceRollbackEntity } from '../entities/balance-rollback.entity';
 import { JobConfigEnum } from 'src/business/common/enums/job-config.enum';
 import { JobRunningStatusEnum } from 'src/business/common/enums/job-running-status.enum';
 import { BalanceRollbackStatusEnum } from '../enums/balance-rollback-status.enum';
+import { DriverBalanceUpdateDescriptionEnum } from 'src/business/common/enums/driver-balance-update-description.enum';
+import { TransactionService } from '../transaction.service';
 
 @Injectable()
 export class BalanceRollbackService {
   private readonly logger = new Logger(BalanceRollbackService.name);
   constructor(
     private readonly yandexService: YandexService,
+    private readonly transactionService: TransactionService,
     @InjectRepository(JobRunningHistoryEntity)
     private readonly jobRunningHistoryRepository: Repository<JobRunningHistoryEntity>,
     @InjectRepository(TransactionRegistrationEntity)
@@ -68,16 +71,16 @@ export class BalanceRollbackService {
         const balanceRollback = await this.balanceRollbackRepository
           .createQueryBuilder('balance')
           .leftJoinAndSelect('balance.transaction', 'transaction')
-          .where('balance.createdAt > :minDate', {
+          .where('balance.transactionDate > :minDate', {
             minDate,
           })
-          .andWhere('balance.createdAt < :maxDate', {
+          .andWhere('balance.transactionDate < :maxDate', {
             maxDate: currentDate,
           })
           .andWhere('balance.statusId IN (:...statuses)', {
             statuses: [BalanceRollbackStatusEnum.New],
           })
-          .orderBy('balance.createdAt')
+          .orderBy('balance.transactionDate')
           .skip(offset)
           .take(batchSize)
           .getMany();
@@ -85,7 +88,7 @@ export class BalanceRollbackService {
         console.log(
           'balance rollback',
           offset,
-          balanceRollback.map((item) => item.createdAt),
+          balanceRollback.map((item) => item.transactionDate),
         );
 
         if (balanceRollback.length === 0) break;
@@ -116,7 +119,7 @@ export class BalanceRollbackService {
   private async balanceRollback(balanceRollback: BalanceRollbackEntity) {
     try {
       await this.balanceRollbackRepository.update(
-        { id: balanceRollback.id },
+        { transactionId: balanceRollback.transactionId },
         {
           statusId: BalanceRollbackStatusEnum.Processing,
         },
@@ -125,14 +128,21 @@ export class BalanceRollbackService {
         balanceRollback.transaction.parkId,
         balanceRollback.transaction.driverId,
         balanceRollback.amount,
-        'balanceRollback',
+        'rollbackBalance',
         balanceRollback.transaction.id,
       );
 
+      await new Promise((resolve) => setTimeout(resolve, 20 * 1000));
+      await this.transactionService.yandexBalanceUpdateSucceeded(
+        balanceRollback.transaction,
+        DriverBalanceUpdateDescriptionEnum.BalanceRollback,
+      );
+
       await this.balanceRollbackRepository.update(
-        { id: balanceRollback.id },
+        { transactionId: balanceRollback.transactionId },
         {
           statusId: BalanceRollbackStatusEnum.Success,
+          tryCount: balanceRollback.tryCount + 1,
         },
       );
 
@@ -142,13 +152,12 @@ export class BalanceRollbackService {
       });
     } catch (error: any) {
       await this.balanceRollbackRepository.update(
-        { id: balanceRollback.id },
+        { transactionId: balanceRollback.transactionId },
         {
-          statusId:
-            error.message === 'BALANCE_ROLLBACK'
-              ? BalanceRollbackStatusEnum.New
-              : BalanceRollbackStatusEnum.Error,
+          statusId: BalanceRollbackStatusEnum.New,
+          errorCode: error.code,
           errorMessage: error.message,
+          tryCount: balanceRollback.tryCount + 1,
         },
       );
     }

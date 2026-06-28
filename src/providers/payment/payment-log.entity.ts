@@ -17,7 +17,7 @@ export class PaymentLogEntity {
   createdAt: Date;
 
   @Column({ nullable: true })
-  transactionId: number;
+  transactionId: string;
 
   @Column()
   method: string;

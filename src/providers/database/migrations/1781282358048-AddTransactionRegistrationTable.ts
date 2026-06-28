@@ -18,9 +18,7 @@ export class AddTransactionRegistrationTable1781282358048
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
-            ALTER TABLE "job_running_history"
-            ALTER COLUMN "start_date"
-            SET DEFAULT now()
+            DROP TABLE "transaction_registration"
         `);
   }
 }

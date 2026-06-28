@@ -17,7 +17,7 @@ export class YandexLogEntity {
   createdAt: Date;
 
   @Column({ nullable: true })
-  transactionId: number;
+  transactionId: string;
 
   @Column({ nullable: true })
   driverId: string;

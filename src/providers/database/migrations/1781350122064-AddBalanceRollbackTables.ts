@@ -18,15 +18,18 @@ export class AddBalanceRollbackTables1781350122064
         `);
     await queryRunner.query(`
             CREATE TABLE "balance_rollback" (
-                "id" integer NOT NULL,
-                "created_at" TIMESTAMP NOT NULL,
+                "transaction_id" character varying NOT NULL,
+                "transaction_date" TIMESTAMP NOT NULL,
                 "status_id" integer NOT NULL,
                 "amount" numeric(20, 2),
+                "error_code" character varying,
                 "error_message" character varying,
+                "created_at" TIMESTAMP NOT NULL DEFAULT now(),
                 "updated_at" TIMESTAMP NOT NULL DEFAULT now(),
-                CONSTRAINT "PK_676bcc71f0956b42142cb727681" PRIMARY KEY ("id", "created_at")
+                "try_count" integer NOT NULL DEFAULT '0',
+                CONSTRAINT "PK_f3a9c80c78f4858797d64f819e4" PRIMARY KEY ("transaction_id", "transaction_date")
             )
-            PARTITION BY RANGE (created_at);
+            PARTITION BY RANGE (transaction_date);
         `);
     await queryRunner.query(`
             CREATE INDEX "IDX_3ec21a918894e1a699f524bc4f" ON "balance_rollback" ("status_id")
@@ -36,9 +39,10 @@ export class AddBalanceRollbackTables1781350122064
             ALTER TABLE "balance_rollback"
             ADD CONSTRAINT "FK_3ec21a918894e1a699f524bc4ff" FOREIGN KEY ("status_id") REFERENCES "balance_rollback_status"("id") ON DELETE NO ACTION ON UPDATE NO ACTION
         `);
+
     await queryRunner.query(`
             ALTER TABLE "balance_rollback"
-            ADD CONSTRAINT "FK_676bcc71f0956b42142cb727681" FOREIGN KEY ("id", "created_at") REFERENCES "transaction"("id", "created_at") ON DELETE NO ACTION ON UPDATE NO ACTION
+            ADD CONSTRAINT "FK_f3a9c80c78f4858797d64f819e4" FOREIGN KEY ("transaction_id", "transaction_date") REFERENCES "transaction"("id", "created_at") ON DELETE NO ACTION ON UPDATE NO ACTION
         `);
 
     await this.createPartitions(queryRunner);
@@ -85,7 +89,7 @@ export class AddBalanceRollbackTables1781350122064
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
-            ALTER TABLE "balance_rollback" DROP CONSTRAINT "FK_676bcc71f0956b42142cb727681"
+            ALTER TABLE "balance_rollback" DROP CONSTRAINT "FK_f3a9c80c78f4858797d64f819e4"
         `);
     await queryRunner.query(`
             ALTER TABLE "balance_rollback" DROP CONSTRAINT "FK_3ec21a918894e1a699f524bc4ff"

@@ -8,6 +8,7 @@ import { TransactionServiceEnum } from 'src/business/transaction/enums/transacti
 import { WithdrawRequest } from 'src/business/transaction/requests/withdraw.request';
 import { PaymentLogEntity } from './payment-log.entity';
 import { Repository } from 'typeorm';
+import { AppError } from 'src/business/utils/app-error';
 
 export type DriversProfilesQuery = {
   id: string;
@@ -84,7 +85,7 @@ export class PaymentService {
     firstName: string,
     lastName: string,
     amount: number,
-    transactionId: number,
+    transactionId: string,
   ): Promise<InfoResponse> {
     const url = this.configService.get<string>('PAYMENT_INFO_URL');
 
@@ -92,7 +93,7 @@ export class PaymentService {
       amount: amount,
       service_id: this.getServiceId(iban),
       currency_id: TransactionCurrencyEnum.Gel,
-      transaction_id: transactionId.toString(),
+      transaction_id: transactionId,
       service_params: {
         iban: iban,
         receiver_firstname: firstName,
@@ -151,7 +152,7 @@ export class PaymentService {
           httpStatus: error.response?.status,
         },
       );
-      throw error;
+      throw new AppError(error.message, 'INFO');
     }
   }
 
@@ -160,7 +161,7 @@ export class PaymentService {
     firstName: string,
     lastName: string,
     amount: number,
-    transactionId: number,
+    transactionId: string,
   ): Promise<PayResponse> {
     const url = this.configService.get<string>('PAYMENT_PAY_URL');
 
@@ -168,7 +169,7 @@ export class PaymentService {
       amount: amount,
       service_id: this.getServiceId(iban),
       currency_id: TransactionCurrencyEnum.Gel,
-      transaction_id: transactionId.toString(),
+      transaction_id: transactionId,
       service_params: {
         iban: iban,
         receiver_firstname: firstName,
@@ -228,15 +229,15 @@ export class PaymentService {
           httpStatus: error.response?.status,
         },
       );
-      throw new Error('PAY');
+      throw new AppError(error.message, 'PAY');
     }
   }
 
-  async payCheck(transactionId: number): Promise<PayCheckResponse> {
+  async payCheck(transactionId: string): Promise<PayCheckResponse> {
     const url = this.configService.get<string>('PAYMENT_PAY_CHECK_URL');
 
     const payload = {
-      transaction_id: transactionId.toString(),
+      transaction_id: transactionId,
     };
 
     const paymentLogObject = this.paymentLogRepository.create({
@@ -280,7 +281,7 @@ export class PaymentService {
           httpStatus: error.response?.status,
         },
       );
-      throw error;
+      throw new AppError(error.message, 'PAY_CHECK');
     }
   }
 

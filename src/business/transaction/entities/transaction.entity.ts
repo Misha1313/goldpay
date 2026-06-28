@@ -18,8 +18,8 @@ import { TransactionStatusEntity } from './transaction-status.entity';
 })
 @Index(['parkId', 'driverId'])
 export class TransactionEntity {
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryColumn()
+  id: string;
 
   @PrimaryColumn()
   createdAt: Date;
@@ -46,8 +46,11 @@ export class TransactionEntity {
   @Column({ nullable: true, type: 'numeric', precision: 20, scale: 2 })
   amount: number;
 
+  @Column({ nullable: true, type: 'numeric', precision: 20, scale: 2 })
+  beforeBalance: number;
+
   @Column({ nullable: true })
-  errorCode: number;
+  errorCode: string;
 
   @Column({ nullable: true })
   errorMessage: string;
@@ -61,10 +64,4 @@ export class TransactionEntity {
   @ManyToOne((type) => TransactionStatusEntity)
   @JoinColumn({ name: 'status_id' })
   status: TransactionStatusEntity;
-
-  @Column({ nullable: true })
-  balanceUpdateErrorCode: string;
-
-  @Column({ nullable: true })
-  balanceUpdateErrorMessage: string;
 }

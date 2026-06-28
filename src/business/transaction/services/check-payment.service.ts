@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { YandexService } from 'src/providers/yandex/yandex.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
@@ -19,7 +18,6 @@ import { TransactionService } from '../transaction.service';
 export class CheckPaymentService {
   private readonly logger = new Logger(CheckPaymentService.name);
   constructor(
-    private readonly yandexService: YandexService,
     private readonly paymentService: PaymentService,
     private readonly transactionService: TransactionService,
     @InjectRepository(TransactionEntity)
@@ -32,7 +30,7 @@ export class CheckPaymentService {
     private readonly balanceRollbackRepository: Repository<BalanceRollbackEntity>,
   ) {}
 
-  @Cron(CronExpression.EVERY_MINUTE)
+  @Cron(CronExpression.EVERY_30_SECONDS)
   async handlePendingTransactions() {
     const lastJobRunningHistoryEntity = await this.jobRunningHistoryRepository
       .createQueryBuilder('job')
@@ -135,13 +133,17 @@ export class CheckPaymentService {
       console.log(
         'errorCode',
         payCheckResponse.errorCode,
-        payCheckResponse.data?.status,
+        this.transactionService.getTransactionStatus(
+          payCheckResponse.data?.status,
+        ),
       );
 
       // transaction is success
       if (
         payCheckResponse.errorCode === 0 &&
-        payCheckResponse.data?.status === TransactionStatusEnum.Success
+        this.transactionService.getTransactionStatus(
+          payCheckResponse.data?.status,
+        ) === TransactionStatusEnum.Success
       ) {
         await this.transactionRepository.update(
           { id: transaction.id },
@@ -163,27 +165,24 @@ export class CheckPaymentService {
       // transaction failed
       if (
         (payCheckResponse.errorCode === 0 &&
-          payCheckResponse.data?.status === TransactionStatusEnum.Cancell) ||
+          this.transactionService.getTransactionStatus(
+            payCheckResponse.data?.status,
+          ) === TransactionStatusEnum.Error) ||
         payCheckResponse.errorCode === 3015
       ) {
-        await this.yandexService.updateDriverBalance(
-          transaction.parkId,
-          transaction.driverId,
-          transaction.amount,
-          'payCheck',
-          transaction.id,
-        );
-
-        await this.transactionRegistrationRepository.delete({
-          driverId: transaction.driverId,
-          parkId: transaction.parkId,
+        const balanceRollbackObject = this.balanceRollbackRepository.create({
+          transactionId: transaction.id,
+          transactionDate: transaction.createdAt,
+          statusId: BalanceRollbackStatusEnum.New,
+          amount: transaction.amount,
         });
+        await this.balanceRollbackRepository.insert(balanceRollbackObject);
 
         await this.transactionRepository.update(
           { id: transaction.id },
           {
-            statusId: TransactionStatusEnum.Cancell,
-            errorCode: payCheckResponse.errorCode,
+            statusId: TransactionStatusEnum.Error,
+            errorCode: 'PAY_CHECK',
             errorMessage: payCheckResponse.errorMessage,
           },
         );
@@ -197,30 +196,33 @@ export class CheckPaymentService {
         { id: transaction.id },
         {
           statusId: TransactionStatusEnum.Pending,
+          errorCode: payCheckResponse.errorCode !== 0 ? 'PAY_CHECK' : null,
+          errorMessage:
+            payCheckResponse.errorCode !== 0
+              ? payCheckResponse.errorMessage
+              : null,
         },
       );
     } catch (error: any) {
-      if (['BALANCE_ROLLBACK'].includes(error.message)) {
-        const balanceRollbackObject = this.balanceRollbackRepository.create({
-          id: transaction.id,
-          createdAt: transaction.createdAt,
-          statusId: BalanceRollbackStatusEnum.New,
-          amount: transaction.amount,
-        });
-        await this.balanceRollbackRepository.insert(balanceRollbackObject);
+      if (['PAY_CHECK'].includes(error.code)) {
+        await this.transactionRepository.update(
+          { id: transaction.id },
+          {
+            statusId: TransactionStatusEnum.Pending,
+            errorCode: error.code,
+            errorMessage: error.message,
+          },
+        );
+        throw error;
       }
       await this.transactionRepository.update(
         { id: transaction.id },
         {
-          statusId: TransactionStatusEnum.Cancell,
+          statusId: TransactionStatusEnum.Error,
+          errorCode: 'PAY_CHECK',
           errorMessage: error.message,
         },
       );
-
-      // await this.transactionRegistrationRepository.delete({
-      //   driverId: transaction.driverId,
-      //   parkId: transaction.parkId,
-      // });
 
       throw error;
     }

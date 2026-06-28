@@ -34,7 +34,7 @@ export class CreateTransactionTables1779182442871
         `);
     await queryRunner.query(`
             CREATE TABLE "transaction" (
-                "id" SERIAL NOT NULL,
+                "id" character varying NOT NULL,
                 "created_at" TIMESTAMP NOT NULL,
                 "park_id" character varying NOT NULL,
                 "driver_id" character varying,
@@ -43,12 +43,11 @@ export class CreateTransactionTables1779182442871
                 "receiver_first_name" character varying NOT NULL,
                 "receiver_last_name" character varying NOT NULL,
                 "amount" numeric(20, 2),
-                "error_code" integer,
+                "before_balance" numeric(20, 2),
+                "error_code" character varying,
                 "error_message" character varying,
                 "provider_transaction_id" bigint,
                 "updated_at" TIMESTAMP NOT NULL DEFAULT now(),
-                "balance_update_error_code" character varying,
-                "balance_update_error_message" character varying,
                 CONSTRAINT "PK_89eadb93a89810556e1cbcd6ab9" PRIMARY KEY ("id", "created_at")
             )
             PARTITION BY RANGE (created_at);
@@ -100,19 +99,19 @@ export class CreateTransactionTables1779182442871
       },
       {
         id: 3,
-        name: 'Status Check',
-      },
-      {
-        id: 100,
         name: 'Pending',
       },
       {
-        id: 1000,
+        id: 4,
+        name: 'Status Check',
+      },
+      {
+        id: 5,
         name: 'Success',
       },
       {
-        id: 9999,
-        name: 'Cancell',
+        id: 6,
+        name: 'Error',
       },
     ];
     await repo.save(data);

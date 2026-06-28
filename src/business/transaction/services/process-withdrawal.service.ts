@@ -1,9 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { YandexService } from 'src/providers/yandex/yandex.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { format, subDays } from 'date-fns';
+import { format, subDays, subSeconds } from 'date-fns';
 import { JobRunningHistoryEntity } from 'src/business/common/entities/job-running-history.entity';
 import { TransactionRegistrationEntity } from '../entities/transaction-registration.entity';
 import { BalanceRollbackEntity } from '../entities/balance-rollback.entity';
@@ -14,12 +13,13 @@ import { TransactionStatusEnum } from '../enums/transaction-status.enum';
 import { PaymentService } from 'src/providers/payment/payment.service';
 import { TransactionEntity } from '../entities/transaction.entity';
 import { TransactionService } from '../transaction.service';
+import { DriverBalanceUpdateDescriptionEnum } from 'src/business/common/enums/driver-balance-update-description.enum';
+import { AppError } from 'src/business/utils/app-error';
 
 @Injectable()
 export class ProcessWithdrawalService {
   private readonly logger = new Logger(ProcessWithdrawalService.name);
   constructor(
-    private readonly yandexService: YandexService,
     private readonly paymentService: PaymentService,
     private readonly transactionService: TransactionService,
     @InjectRepository(TransactionEntity)
@@ -67,8 +67,8 @@ export class ProcessWithdrawalService {
       let offset = 0;
       const batchSize = 50;
 
-      const currentDate = format(new Date(), 'yyyy-MM-dd HH:mm:ss');
       const minDate = format(subDays(new Date(), 1), 'yyyy-MM-dd HH:mm:ss');
+      const maxDate = format(subSeconds(new Date(), 30), 'yyyy-MM-dd HH:mm:ss');
 
       while (true) {
         const transactions = await this.transactionRepository
@@ -77,7 +77,7 @@ export class ProcessWithdrawalService {
             minDate,
           })
           .andWhere('transaction.createdAt < :maxDate', {
-            maxDate: currentDate,
+            maxDate: maxDate,
           })
           .andWhere('transaction.statusId = :statusId', {
             statusId: TransactionStatusEnum.ReadyToProcess,
@@ -128,11 +128,35 @@ export class ProcessWithdrawalService {
         },
       );
 
+      await this.transactionService.yandexBalanceUpdateSucceeded(
+        transaction,
+        DriverBalanceUpdateDescriptionEnum.BalanceWithdrawal,
+      );
+
+      const infoResponse = await this.paymentService.info(
+        transaction.iban,
+        transaction.receiverFirstName,
+        transaction.receiverLastName,
+        transaction.amount - 0.1,
+        transaction.id,
+      );
+
+      console.log(
+        'info response',
+        infoResponse.errorCode,
+        infoResponse.errorMessage,
+      );
+
+      // info returned error. payment can not be made
+      if (infoResponse.errorCode) {
+        throw new AppError(infoResponse.errorMessage, 'INFO');
+      }
+
       const payResponse = await this.paymentService.pay(
         transaction.iban,
         transaction.receiverFirstName,
         transaction.receiverLastName,
-        transaction.amount,
+        transaction.amount - 0.1,
         transaction.id,
       );
 
@@ -148,55 +172,59 @@ export class ProcessWithdrawalService {
 
       console.log('updatedTransactionStatus', updatedTransactionStatus);
 
-      if (updatedTransactionStatus === TransactionStatusEnum.Cancell) {
+      if (updatedTransactionStatus === TransactionStatusEnum.Error) {
         console.log('trying balance rollback');
-        await this.yandexService.updateDriverBalance(
-          transaction.parkId,
-          transaction.driverId,
-          transaction.amount,
-          'processWithdrawal',
-          transaction.id,
-        );
+        throw new AppError(payResponse.errorMessage, 'PAY');
       }
 
       await this.transactionRepository.update(
         { id: transaction.id },
         {
           statusId: updatedTransactionStatus,
-          errorCode: payResponse.errorCode,
-          errorMessage: payResponse.errorMessage,
           providerTransactionId: payResponse.data?.id,
         },
       );
 
-      if (updatedTransactionStatus !== TransactionStatusEnum.Pending) {
+      if (updatedTransactionStatus === TransactionStatusEnum.Success) {
         await this.transactionRegistrationRepository.delete({
           driverId: transaction.driverId,
           parkId: transaction.parkId,
         });
       }
     } catch (error: any) {
-      if (['PAY', 'BALANCE_ROLLBACK'].includes(error.message)) {
+      if (['INFO', 'PAY'].includes(error.code)) {
         const balanceRollbackObject = this.balanceRollbackRepository.create({
-          id: transaction.id,
-          createdAt: transaction.createdAt,
+          transactionId: transaction.id,
+          transactionDate: transaction.createdAt,
           statusId: BalanceRollbackStatusEnum.New,
           amount: transaction.amount,
         });
         await this.balanceRollbackRepository.insert(balanceRollbackObject);
       }
+
+      if (
+        [
+          'DRIVER_BALANCE_WITHDRAWAL_CHECK',
+          'DRIVER_BALANCE_WITHDRAWAL_CHECK.GET_DRIVER_BALANCE',
+          'DRIVER_BALANCE_WITHDRAWAL_CHECK.GET_TRANSACTIONS',
+          'DRIVER_BALANCE_ROLLBACK_CHECK',
+          'DRIVER_BALANCE_ROLLBACK_CHECK.GET_DRIVER_BALANCE',
+          'DRIVER_BALANCE_ROLLBACK_CHECK.GET_TRANSACTIONS',
+        ].includes(error.code)
+      ) {
+        await this.transactionRegistrationRepository.delete({
+          driverId: transaction.driverId,
+          parkId: transaction.parkId,
+        });
+      }
       await this.transactionRepository.update(
         { id: transaction.id },
         {
-          statusId: TransactionStatusEnum.Cancell,
+          statusId: TransactionStatusEnum.Error,
+          errorCode: error.code,
           errorMessage: error.message,
         },
       );
-
-      // await this.transactionRegistrationRepository.delete({
-      //   driverId: transaction.driverId,
-      //   parkId: transaction.parkId,
-      // });
 
       throw error;
     }

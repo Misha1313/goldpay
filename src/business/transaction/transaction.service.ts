@@ -4,34 +4,29 @@ import {
   Logger,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import {
-  PaymentService,
-  PayResponse,
-} from 'src/providers/payment/payment.service';
+import { PayResponse } from 'src/providers/payment/payment.service';
 import { YandexService } from 'src/providers/yandex/yandex.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TransactionEntity } from './entities/transaction.entity';
 import { WithdrawRequest } from './requests/withdraw.request';
-import { ConfigService } from '@nestjs/config';
 import { TransactionStatusEnum } from './enums/transaction-status.enum';
-import { format, subHours } from 'date-fns';
+import { format, subHours, subSeconds } from 'date-fns';
 import { PaymentAccountEntity } from './entities/payment-account.entity';
 import { GetTransactionsRequest } from './requests/get-transactions.request';
 import { JwtPayload } from '../auth/auth.service';
 import { TransactionRegistrationEntity } from './entities/transaction-registration.entity';
-import { BalanceRollbackEntity } from './entities/balance-rollback.entity';
-import { BalanceRollbackStatusEnum } from './enums/balance-rollback-status.enum';
+import { DriverBalanceUpdateDescriptionEnum } from '../common/enums/driver-balance-update-description.enum';
+import { v4 as uuidv4 } from 'uuid';
+import { AppError } from '../utils/app-error';
 
 @Injectable()
 export class TransactionService {
   private readonly logger = new Logger(TransactionService.name);
   constructor(
     private readonly yandexService: YandexService,
-    private readonly paymentService: PaymentService,
     @InjectRepository(TransactionEntity)
     private readonly transactionRepository: Repository<TransactionEntity>,
-    private readonly configService: ConfigService,
     @InjectRepository(PaymentAccountEntity)
     private readonly paymentAccountRepository: Repository<PaymentAccountEntity>,
     @InjectRepository(TransactionRegistrationEntity)
@@ -70,8 +65,11 @@ export class TransactionService {
 
     await this.fillTransactionRegistration(driverId, parkId);
 
+    const transactionId = uuidv4();
+
     // save in transactions table
     const newTransactionObject = this.transactionRepository.create({
+      id: transactionId,
       createdAt: new Date(),
       parkId: parkId,
       driverId: driverId,
@@ -80,43 +78,13 @@ export class TransactionService {
       receiverFirstName: request.firstName,
       receiverLastName: request.lastName,
       amount: request.amount,
+      beforeBalance: getBalanceResponse.balance,
       updatedAt: new Date(),
     });
     const newTransactionEntity =
       await this.transactionRepository.save(newTransactionObject);
 
     try {
-      const infoResponse = await this.paymentService.info(
-        request.iban,
-        request.firstName,
-        request.lastName,
-        request.amount,
-        newTransactionEntity.id,
-      );
-
-      console.log(
-        'info response',
-        infoResponse.errorCode,
-        infoResponse.errorMessage,
-      );
-
-      // info returned error. payment can not be made
-      if (infoResponse.errorCode) {
-        await this.transactionRepository.update(
-          { id: newTransactionEntity.id },
-          {
-            statusId: TransactionStatusEnum.Cancell,
-            errorCode: infoResponse.errorCode,
-            errorMessage: infoResponse.errorMessage,
-          },
-        );
-        await this.transactionRegistrationRepository.delete({
-          driverId,
-          parkId,
-        });
-        throw new Error('Info');
-      }
-
       const updateBalanceResponse =
         await this.yandexService.updateDriverBalance(
           parkId,
@@ -139,20 +107,12 @@ export class TransactionService {
         },
       );
     } catch (error: any) {
-      if (
-        [
-          'TRANSACTION_IN_PROGRESS',
-          'TOO_MANY_REQUESTS',
-          'INSUFFICIENT_BALANCE',
-        ].includes(error.message)
-      ) {
-        throw error;
-      }
-
       await this.transactionRepository.update(
         { id: newTransactionEntity.id },
         {
-          statusId: TransactionStatusEnum.Cancell,
+          statusId: TransactionStatusEnum.Error,
+          errorCode: error.code,
+          errorMessage: error.message,
         },
       );
 
@@ -180,40 +140,6 @@ export class TransactionService {
     }
   }
 
-  private async executePay(
-    request: Partial<WithdrawRequest>,
-    transactionId: number,
-  ) {
-    const retries = Number(this.configService.get<number>('RETRY_NUMBER'));
-    const delayMs = Number(this.configService.get<number>('RETRY_INTERVAL'));
-
-    for (let attempt = 1; attempt <= retries; attempt++) {
-      try {
-        const payResponse = await this.paymentService.pay(
-          request.iban,
-          request.firstName,
-          request.lastName,
-          request.amount,
-          transactionId,
-        );
-
-        console.log('payResponse', payResponse);
-
-        // need to find out about other error codes too
-        if (
-          [3003, 9000, 9999].includes(payResponse.errorCode) &&
-          attempt < retries
-        ) {
-          await new Promise((resolve) => setTimeout(resolve, delayMs));
-        }
-
-        return payResponse;
-      } catch (error) {
-        console.log('executePay error');
-      }
-    }
-  }
-
   private async getLastHourSuccessTransaction(
     parkId: string,
     driverId: string,
@@ -234,8 +160,9 @@ export class TransactionService {
   }
 
   getUpdatedTransactionStatus(payResponse: PayResponse) {
-    if (payResponse.errorCode !== 0) return TransactionStatusEnum.Cancell;
-    if (payResponse.errorCode === 0) return payResponse?.data.status;
+    if (payResponse.errorCode !== 0) return TransactionStatusEnum.Error;
+    if (payResponse.errorCode === 0)
+      return this.getTransactionStatus(payResponse?.data.status);
   }
 
   private async savePaymentAccount(
@@ -329,5 +256,104 @@ export class TransactionService {
       5,
       'refillBalance-dev',
     );
+  }
+
+  async yandexBalanceUpdateSucceeded(
+    transactionEntity: TransactionEntity,
+    description: string,
+  ) {
+    try {
+      const parentProcess =
+        description === DriverBalanceUpdateDescriptionEnum.BalanceWithdrawal
+          ? 'withdrawBalance'
+          : 'rollbackBalance';
+      const { balance } = await this.yandexService.getDriverBalance(
+        transactionEntity.driverId,
+        `${parentProcess}.recheckBalance`,
+        transactionEntity.id,
+      );
+
+      const { transactions } = await this.yandexService.getTransactions(
+        transactionEntity.driverId,
+        subSeconds(transactionEntity.createdAt, 3),
+        new Date(),
+        `${parentProcess}.recheckBalance`,
+        transactionEntity.id,
+      );
+
+      console.log('transactions', transactions);
+
+      const transaction = transactions.find((item) => {
+        const amount =
+          description === DriverBalanceUpdateDescriptionEnum.BalanceWithdrawal
+            ? -1 * (Number(item.amount) || 0)
+            : Number(item.amount) || 0;
+        return (
+          amount === Number(transactionEntity.amount) &&
+          item.description === description
+        );
+      });
+
+      if (!transaction) {
+        throw new Error('transaction was not found');
+      }
+
+      const totalTransactionAmount = transactions.reduce(
+        (sum, item) => sum + (Number(item.amount) || 0),
+        0,
+      );
+
+      console.log(
+        'yandexBalanceUpdateSucceeded paras:',
+        balance,
+        Number(transactionEntity.beforeBalance),
+        totalTransactionAmount,
+        Number(balance) -
+          Number(transactionEntity.beforeBalance) -
+          totalTransactionAmount,
+      );
+
+      if (
+        !(
+          Math.abs(
+            Number(balance) -
+              Number(transactionEntity.beforeBalance) -
+              totalTransactionAmount,
+          ) < 1
+        )
+      ) {
+        throw new Error('balance was not updated');
+      }
+
+      return true;
+    } catch (error: any) {
+      console.log('yandexBalanceUpdateCheck Error:', error.message);
+      const apiErrorCode = ['GET_DRIVER_BALANCE', 'GET_TRANSACTIONS'].includes(
+        error.code,
+      )
+        ? '.' + error.code
+        : '';
+      const errorCode =
+        description === DriverBalanceUpdateDescriptionEnum.BalanceWithdrawal
+          ? 'DRIVER_BALANCE_WITHDRAWAL_CHECK'
+          : 'DRIVER_BALANCE_ROLLBACK_CHECK';
+      throw new AppError(error.message, errorCode + apiErrorCode);
+    }
+  }
+
+  getTransactionStatus(status: number) {
+    switch (status) {
+      case 100:
+        return TransactionStatusEnum.Pending;
+
+      case 1000:
+        return TransactionStatusEnum.Success;
+
+      case 9999:
+        return TransactionStatusEnum.Error;
+
+      default:
+        break;
+    }
   }
 }
