@@ -31,7 +31,7 @@ export class BalanceRollbackService {
     private readonly transactionRepository: Repository<TransactionEntity>,
   ) {}
 
-  // @Cron(CronExpression.EVERY_30_SECONDS)
+  @Cron(CronExpression.EVERY_30_SECONDS)
   async handleBalanceRollback() {
     const lastJobRunningHistoryEntity = await this.jobRunningHistoryRepository
       .createQueryBuilder('job')
