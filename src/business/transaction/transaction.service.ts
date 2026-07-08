@@ -7,7 +7,7 @@ import {
 import { PayResponse } from 'src/providers/payment/payment.service';
 import { YandexService } from 'src/providers/yandex/yandex.service';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Not, Repository } from 'typeorm';
 import { TransactionEntity } from './entities/transaction.entity';
 import { WithdrawRequest } from './requests/withdraw.request';
 import { TransactionStatusEnum } from './enums/transaction-status.enum';
@@ -204,6 +204,19 @@ export class TransactionService {
       });
 
       await this.paymentAccountRepository.save(paymentAccountObject);
+    }
+
+    if (request.setDefaultPaymentAccount) {
+      await this.paymentAccountRepository.update(
+        {
+          parkId: parkId,
+          driverId: driverId,
+          iban: Not(request.iban),
+        },
+        {
+          default: false,
+        },
+      );
     }
   }
 
