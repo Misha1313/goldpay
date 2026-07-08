@@ -12,6 +12,8 @@ import { JobRunningStatusEnum } from 'src/business/common/enums/job-running-stat
 import { BalanceRollbackStatusEnum } from '../enums/balance-rollback-status.enum';
 import { DriverBalanceUpdateDescriptionEnum } from 'src/business/common/enums/driver-balance-update-description.enum';
 import { TransactionService } from '../transaction.service';
+import { TransactionEntity } from '../entities/transaction.entity';
+import { TransactionStatusEnum } from '../enums/transaction-status.enum';
 
 @Injectable()
 export class BalanceRollbackService {
@@ -25,9 +27,11 @@ export class BalanceRollbackService {
     private readonly transactionRegistrationRepository: Repository<TransactionRegistrationEntity>,
     @InjectRepository(BalanceRollbackEntity)
     private readonly balanceRollbackRepository: Repository<BalanceRollbackEntity>,
+    @InjectRepository(TransactionEntity)
+    private readonly transactionRepository: Repository<TransactionEntity>,
   ) {}
 
-  @Cron(CronExpression.EVERY_30_SECONDS)
+  // @Cron(CronExpression.EVERY_30_SECONDS)
   async handleBalanceRollback() {
     const lastJobRunningHistoryEntity = await this.jobRunningHistoryRepository
       .createQueryBuilder('job')
@@ -143,6 +147,13 @@ export class BalanceRollbackService {
         {
           statusId: BalanceRollbackStatusEnum.Success,
           tryCount: balanceRollback.tryCount + 1,
+        },
+      );
+
+      await this.transactionRepository.update(
+        { id: balanceRollback.transactionId },
+        {
+          statusId: TransactionStatusEnum.Error,
         },
       );
 

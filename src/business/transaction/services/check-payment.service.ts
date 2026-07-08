@@ -181,7 +181,7 @@ export class CheckPaymentService {
         await this.transactionRepository.update(
           { id: transaction.id },
           {
-            statusId: TransactionStatusEnum.Error,
+            statusId: TransactionStatusEnum.BalanceRollback,
             errorCode: 'PAY_CHECK',
             errorMessage: payCheckResponse.errorMessage,
           },

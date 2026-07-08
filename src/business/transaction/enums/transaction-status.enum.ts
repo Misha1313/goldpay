@@ -6,4 +6,5 @@ export enum TransactionStatusEnum {
   StatusCheck = 4,
   Success = 5,
   Error = 6,
+  BalanceRollback = 7,
 }

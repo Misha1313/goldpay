@@ -113,6 +113,10 @@ export class CreateTransactionTables1779182442871
         id: 6,
         name: 'Error',
       },
+      {
+        id: 7,
+        name: 'Balance Rollback',
+      },
     ];
     await repo.save(data);
   }

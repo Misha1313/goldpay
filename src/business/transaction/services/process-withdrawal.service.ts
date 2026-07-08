@@ -200,6 +200,17 @@ export class ProcessWithdrawalService {
           amount: transaction.amount,
         });
         await this.balanceRollbackRepository.insert(balanceRollbackObject);
+
+        await this.transactionRepository.update(
+          { id: transaction.id },
+          {
+            statusId: TransactionStatusEnum.BalanceRollback,
+            errorCode: error.code,
+            errorMessage: error.message,
+          },
+        );
+
+        throw error;
       }
 
       if (
