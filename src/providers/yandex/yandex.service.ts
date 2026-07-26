@@ -107,19 +107,26 @@ export class YandexService {
           timeout: 10000, // optional
         };
 
-        const response = await axios.get(url, config);
+        const responseObj = await axios.get(url, config);
 
-        console.log('getDriverBalanceResponse', response.data);
+        const response = {
+          ...responseObj.data,
+          balance: responseObj?.data?.balance
+            ? Math.floor(Number(responseObj.data.balance) * 100) / 100
+            : responseObj?.data?.balance,
+        };
+
+        console.log('getDriverBalanceResponse', response);
 
         await this.yandexLogRepository.update(
           { id: yandexLogEntity.id },
           {
-            response: response.data,
+            response: response,
             httpStatus: response.status,
           },
         );
 
-        return response.data;
+        return response;
       } catch (error: any) {
         console.log('getDriverBalance error:', error.message);
         if (attempt < retries) {

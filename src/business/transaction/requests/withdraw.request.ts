@@ -41,6 +41,7 @@ export class WithdrawRequest {
 
   @ApiProperty({ default: '1' })
   @Type(() => Number)
+  @Transform(({ value }) => Math.floor(Number(value) * 100) / 100)
   @IsNumber()
   @Min(1)
   @Max(1500)
