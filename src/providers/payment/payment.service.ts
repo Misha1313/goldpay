@@ -26,8 +26,10 @@ type InfoRequest = {
     iban: string;
     receiver_firstname: string;
     receiver_lastname: string;
+    receiver_personal_number: string;
     sender_firstname: string;
     sender_lastname: string;
+    sender_personal_number: string;
     personal_number: string;
   };
   instrument_id: number;
@@ -98,15 +100,17 @@ export class PaymentService {
         iban: iban,
         receiver_firstname: firstName,
         receiver_lastname: lastName,
+        receiver_personal_number: '00000000000',
         sender_firstname: this.configService.get<string>(
           'PAYMENT_SENDER_FIRST_NAME',
         ),
         sender_lastname: this.configService.get<string>(
           'PAYMENT_SENDER_LAST_NAME',
         ),
-        personal_number: this.configService.get<string>(
+        sender_personal_number: this.configService.get<string>(
           'PAYMENT_SENDER_PERSONAL_NUMBER',
         ),
+        personal_number: '00000000000',
       },
       instrument_id: 9,
       additional_info: null,
@@ -174,15 +178,17 @@ export class PaymentService {
         iban: iban,
         receiver_firstname: firstName,
         receiver_lastname: lastName,
+        receiver_personal_number: '00000000000',
         sender_firstname: this.configService.get<string>(
           'PAYMENT_SENDER_FIRST_NAME',
         ),
         sender_lastname: this.configService.get<string>(
           'PAYMENT_SENDER_LAST_NAME',
         ),
-        personal_number: this.configService.get<string>(
+        sender_personal_number: this.configService.get<string>(
           'PAYMENT_SENDER_PERSONAL_NUMBER',
         ),
+        personal_number: '00000000000',
       },
       instrument_id: 9,
       additional_info: null,
