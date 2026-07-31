@@ -137,7 +137,7 @@ export class ProcessWithdrawalService {
         transaction.iban,
         transaction.receiverFirstName,
         transaction.receiverLastName,
-        transaction.amount - 0.1,
+        transaction.amount - 0.5,
         transaction.id,
       );
 
@@ -156,7 +156,7 @@ export class ProcessWithdrawalService {
         transaction.iban,
         transaction.receiverFirstName,
         transaction.receiverLastName,
-        transaction.amount - 0.1,
+        transaction.amount - 0.5,
         transaction.id,
       );
 
