@@ -68,7 +68,7 @@ export class CheckPaymentService {
       const batchSize = 50;
 
       const currentDate = format(new Date(), 'yyyy-MM-dd HH:mm:ss');
-      const minDate = format(subDays(new Date(), 1), 'yyyy-MM-dd HH:mm:ss');
+      const minDate = format(subDays(new Date(), 3), 'yyyy-MM-dd HH:mm:ss');
 
       while (true) {
         const transactions = await this.transactionRepository
