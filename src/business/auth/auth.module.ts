@@ -15,6 +15,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthEntity } from './entities/auth.entity';
 import { AuthOtpCodeEntity } from './entities/auth-otp-code.entity';
 import { SmsModule } from 'src/providers/sms/sms.module';
+import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
+import { JwtAuthRefreshGuard } from './guards/jwt-auth-refresh.guard';
 
 @Module({
   imports: [
@@ -28,10 +30,10 @@ import { SmsModule } from 'src/providers/sms/sms.module';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: async (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET'),
-        signOptions: {
-          expiresIn: configService.get<number>('JWT_EXPIRES_IN') || 3600,
-        },
+        // secret: configService.get<string>('JWT_SECRET'),
+        // signOptions: {
+        //   expiresIn: configService.get<number>('JWT_EXPIRES_IN') || 3600,
+        // },
       }),
     }),
     SmsModule,
@@ -46,6 +48,8 @@ import { SmsModule } from 'src/providers/sms/sms.module';
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
     },
+    JwtRefreshStrategy,
+    JwtAuthRefreshGuard,
   ],
   exports: [AuthService],
 })
