@@ -53,7 +53,7 @@ export class AuthController {
     res.cookie('refreshToken', refresh_token, {
       httpOnly: true,
       secure: false,
-      sameSite: 'strict',
+      // sameSite: 'strict',
       path: 'auth',
       expires: addSeconds(
         new Date(),
@@ -89,7 +89,7 @@ export class AuthController {
     res.cookie('refreshToken', refresh_token, {
       httpOnly: true,
       secure: false,
-      sameSite: 'strict',
+      // sameSite: 'strict',
       path: 'auth',
       expires: addSeconds(
         authEntity.createdAt,
