@@ -52,7 +52,8 @@ export class AuthController {
 
     res.cookie('refreshToken', refresh_token, {
       httpOnly: true,
-      secure: false,
+      // secure: false,
+      secure: true,
       sameSite: 'none',
       // sameSite: 'strict',
       path: 'auth',
@@ -89,7 +90,8 @@ export class AuthController {
 
     res.cookie('refreshToken', refresh_token, {
       httpOnly: true,
-      secure: false,
+      // secure: false,
+      secure: true,
       sameSite: 'none',
       // sameSite: 'strict',
       path: 'auth',
