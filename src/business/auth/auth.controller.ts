@@ -56,7 +56,7 @@ export class AuthController {
       secure: true,
       sameSite: 'none',
       // sameSite: 'strict',
-      path: 'auth',
+      path: '/',
       expires: addSeconds(
         new Date(),
         Number(refreshJwtExpiresInString.slice(0, -1)),
@@ -94,7 +94,7 @@ export class AuthController {
       secure: true,
       sameSite: 'none',
       // sameSite: 'strict',
-      path: 'auth',
+      path: '/',
       expires: addSeconds(
         authEntity.createdAt,
         Number(refreshJwtExpiresInString.slice(0, -1)),
