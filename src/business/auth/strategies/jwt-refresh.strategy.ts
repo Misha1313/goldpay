@@ -19,6 +19,7 @@ export class JwtRefreshStrategy extends PassportStrategy(
   }
 
   async validate(payload: JwtPayload) {
+    console.log('strategy');
     // add findOne for partners/admin too
     // const user = await this.driverService.getDriverByPhone(payload.sub);
 
