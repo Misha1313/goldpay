@@ -30,7 +30,7 @@ async function bootstrap() {
     .setVersion('1.0')
     .addTag('task1')
     .addBearerAuth()
-    .addServer(configService.get<string>('SWAGGER_URL_PREFIX'))
+    .addServer(configService.get<string>('PROD_URL_PREFIX'))
     .build();
   const documentFactory = () => SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('swagger', app, documentFactory);
