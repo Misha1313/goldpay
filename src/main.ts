@@ -16,8 +16,11 @@ async function bootstrap() {
     }),
   );
 
+  const allowedOrigins = ['http://localhost:5173', 'https://goldpay.ge'];
+
   app.enableCors({
-    origin: '*',
+    origin: allowedOrigins,
+    credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
