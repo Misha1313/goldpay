@@ -34,6 +34,9 @@ export class AuthEntity {
   @Column()
   roleId: number;
 
+  @Column({ nullable: true })
+  logoutDate: Date;
+
   @BeforeInsert()
   updateDates() {
     console.log('auth insert dates');

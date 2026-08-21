@@ -104,6 +104,20 @@ export class AuthController {
     return { access_token };
   }
 
+  @Post('logout')
+  async logout(@Req() req, @Res({ passthrough: true }) res) {
+    await this.authService.logout(req.user);
+
+    res.clearCookie('refreshToken', {
+      httpOnly: true,
+      // secure: false,
+      secure: true,
+      sameSite: 'none',
+      // sameSite: 'strict',
+      path: '/',
+    });
+  }
+
   @Public()
   @Post('register')
   signUp(@Body() registerDto: RegisterDto) {

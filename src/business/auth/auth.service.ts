@@ -213,4 +213,11 @@ export class AuthService {
   async getAuthById(id: number) {
     return this.authRepository.findOneBy({ id });
   }
+
+  async logout(JwtPayload: JwtPayload) {
+    return this.authRepository.update(
+      { id: JwtPayload.sessionId },
+      { logoutDate: new Date() },
+    );
+  }
 }
