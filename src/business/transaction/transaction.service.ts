@@ -36,7 +36,7 @@ export class TransactionService {
   async withdrawBalance(request: WithdrawRequest, jwtPayload: JwtPayload) {
     const { sub: driverId, parkId } = jwtPayload;
 
-    if (driverId !== '29daa66634ac497a94cbf32c3cea1a1s') {
+    if (driverId !== '29daa66634ac497a94cbf32c3cea1a18') {
       throw new Error('not dev user');
     }
 
