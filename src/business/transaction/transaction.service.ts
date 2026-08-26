@@ -11,7 +11,7 @@ import { Not, Repository } from 'typeorm';
 import { TransactionEntity } from './entities/transaction.entity';
 import { WithdrawRequest } from './requests/withdraw.request';
 import { TransactionStatusEnum } from './enums/transaction-status.enum';
-import { format, subHours, subSeconds } from 'date-fns';
+import { format, subHours, subMinutes, subSeconds } from 'date-fns';
 import { PaymentAccountEntity } from './entities/payment-account.entity';
 import { GetTransactionsRequest } from './requests/get-transactions.request';
 import { JwtPayload } from '../auth/auth.service';
@@ -151,14 +151,14 @@ export class TransactionService {
     return this.transactionRepository
       .createQueryBuilder('transaction')
       .where('transaction.createdAt > :minDate', {
-        minDate: format(subHours(new Date(), 1), 'yyyy-MM-dd HH:mm:ss'),
+        minDate: format(subMinutes(new Date(), 10), 'yyyy-MM-dd HH:mm:ss'),
       })
       .andWhere('transaction.parkId = :parkId', { parkId })
       .andWhere('transaction.driverId = :driverId', {
         driverId,
       })
-      .andWhere('transaction.statusId = :statusId', {
-        statusId: TransactionStatusEnum.Success,
+      .andWhere('transaction.statusId <> :statusId', {
+        statusId: TransactionStatusEnum.Error,
       })
       .getOne();
   }
