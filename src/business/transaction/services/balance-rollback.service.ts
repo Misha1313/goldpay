@@ -137,10 +137,10 @@ export class BalanceRollbackService {
       );
 
       await new Promise((resolve) => setTimeout(resolve, 20 * 1000));
-      await this.transactionService.yandexBalanceUpdateSucceeded(
-        balanceRollback.transaction,
-        DriverBalanceUpdateDescriptionEnum.BalanceRollback,
-      );
+      // await this.transactionService.yandexBalanceUpdateSucceeded(
+      //   balanceRollback.transaction,
+      //   DriverBalanceUpdateDescriptionEnum.BalanceRollback,
+      // );
 
       await this.balanceRollbackRepository.update(
         { transactionId: balanceRollback.transactionId },

@@ -128,10 +128,10 @@ export class ProcessWithdrawalService {
         },
       );
 
-      await this.transactionService.yandexBalanceUpdateSucceeded(
-        transaction,
-        DriverBalanceUpdateDescriptionEnum.BalanceWithdrawal,
-      );
+      // await this.transactionService.yandexBalanceUpdateSucceeded(
+      //   transaction,
+      //   DriverBalanceUpdateDescriptionEnum.BalanceWithdrawal,
+      // );
 
       const infoResponse = await this.paymentService.info(
         transaction.iban,
