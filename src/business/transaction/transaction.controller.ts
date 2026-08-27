@@ -31,8 +31,8 @@ export class TransactionController {
   }
 
   // @Public()
-  // @Post('refill-balance-dev')
-  // refillBalance(@Req() req) {
-  //   return this.transactionService.refillBalance(req.user);
-  // }
+  @Post('refill-balance-dev')
+  refillBalance(@Req() req) {
+    return this.transactionService.refillBalance(req.user);
+  }
 }
