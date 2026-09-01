@@ -36,15 +36,6 @@ export class TransactionService {
   async withdrawBalance(request: WithdrawRequest, jwtPayload: JwtPayload) {
     const { sub: driverId, parkId } = jwtPayload;
 
-    if (
-      ![
-        '5f7db4f7e4dc4ff68505a25ee8606219', // alim
-        '29daa66634ac497a94cbf32c3cea1a18', // misha
-      ].includes(driverId)
-    ) {
-      throw new Error('not dev user');
-    }
-
     const lastHourSuccessTransaction = await this.getLastHourSuccessTransaction(
       parkId,
       driverId,
