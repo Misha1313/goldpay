@@ -104,7 +104,7 @@ export class YandexService {
 
         const config: AxiosRequestConfig = {
           headers,
-          timeout: 10000, // optional
+          timeout: 20000, // optional
         };
 
         const responseObj = await axios.get(url, config);
@@ -146,57 +146,74 @@ export class YandexService {
   }
 
   async getDriverProfile(driverId: string): Promise<GetDriverProfileResponse> {
-    const url = `https://fleet-api.taxi.yandex.net/v2/parks/contractors/driver-profile?contractor_profile_id=${driverId}`;
+    const retries = Number(this.configService.get<number>('RETRY_NUMBER'));
+    const delayMs = Number(this.configService.get<number>('RETRY_INTERVAL'));
 
-    const headers = {
-      'X-API-Key': this.X_API_KEY,
-      'X-Client-ID': this.X_CLIENT_ID,
-      'X-Park-ID': this.X_PARK_ID,
-    };
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const url = `https://fleet-api.taxi.yandex.net/v2/parks/contractors/driver-profile?contractor_profile_id=${driverId}`;
 
-    const config: AxiosRequestConfig = {
-      headers,
-      timeout: 10000, // optional
-    };
+        const headers = {
+          'X-API-Key': this.X_API_KEY,
+          'X-Client-ID': this.X_CLIENT_ID,
+          'X-Park-ID': this.X_PARK_ID,
+        };
 
-    try {
-      const response = await axios.get(url, config);
-      return response.data;
-    } catch (error: any) {
-      console.error('getDriverBalance request failed:', error.response?.data);
-      if (error.response?.status === 404) {
-        throw new NotFoundException('Contractor not found');
+        const config: AxiosRequestConfig = {
+          headers,
+          timeout: 20000, // optional
+        };
+
+        const response = await axios.get(url, config);
+        return response.data;
+      } catch (error: any) {
+        console.error('getDriverInfo request failed:', error.response?.data);
+        if (attempt < retries) {
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          continue;
+        }
+
+        throw error;
       }
-      throw error;
     }
   }
 
   async getDriversProfiles(query: DriversProfilesQuery) {
-    const url =
-      'https://fleet-api.taxi.yandex.net/v1/parks/driver-profiles/list';
+    const retries = Number(this.configService.get<number>('RETRY_NUMBER'));
+    const delayMs = Number(this.configService.get<number>('RETRY_INTERVAL'));
 
-    const payload = {
-      query: {
-        park: query,
-      },
-    };
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const url =
+          'https://fleet-api.taxi.yandex.net/v1/parks/driver-profiles/list';
 
-    const headers = {
-      'X-API-Key': this.X_API_KEY,
-      'X-Client-ID': this.X_CLIENT_ID,
-    };
+        const payload = {
+          query: {
+            park: query,
+          },
+        };
 
-    const config: AxiosRequestConfig = {
-      headers,
-      timeout: 10000, // optional
-    };
+        const headers = {
+          'X-API-Key': this.X_API_KEY,
+          'X-Client-ID': this.X_CLIENT_ID,
+        };
 
-    try {
-      const response = await axios.post(url, payload, config);
-      return response.data;
-    } catch (error: any) {
-      console.error('POST request failed:', error.message);
-      throw error;
+        const config: AxiosRequestConfig = {
+          headers,
+          timeout: 20000, // optional
+        };
+
+        const response = await axios.post(url, payload, config);
+        return response.data;
+      } catch (error: any) {
+        console.error('getDriversProfiles request failed:', error?.message);
+        if (attempt < retries) {
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          continue;
+        }
+
+        throw error;
+      }
     }
   }
 
@@ -288,6 +305,9 @@ export class YandexService {
     process: string,
     transactionId: string,
   ): Promise<GetTransactionsResponse> {
+    const retries = Number(this.configService.get<number>('RETRY_NUMBER'));
+    const delayMs = Number(this.configService.get<number>('RETRY_INTERVAL'));
+
     const url =
       'https://fleet-api.taxi.yandex.net/v2/parks/driver-profiles/transactions/list';
 
@@ -327,29 +347,35 @@ export class YandexService {
 
     const config: AxiosRequestConfig = {
       headers,
-      timeout: 10000, // optional
+      timeout: 20000, // optional
     };
 
-    try {
-      const response = await axios.post(url, payload, config);
-      await this.yandexLogRepository.update(
-        { id: yandexLogEntity.id },
-        {
-          response: response.data,
-          httpStatus: response.status,
-        },
-      );
-      return response.data;
-    } catch (error: any) {
-      console.error('POST request failed:', error.message);
-      await this.yandexLogRepository.update(
-        { id: yandexLogEntity.id },
-        {
-          error: error.message,
-          httpStatus: error.response?.status,
-        },
-      );
-      throw new AppError(error.message, 'GET_TRANSACTIONS');
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const response = await axios.post(url, payload, config);
+        await this.yandexLogRepository.update(
+          { id: yandexLogEntity.id },
+          {
+            response: response.data,
+            httpStatus: response.status,
+          },
+        );
+        return response.data;
+      } catch (error: any) {
+        console.error('getTransactions request failed:', error.message);
+        if (attempt < retries) {
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          continue;
+        }
+        await this.yandexLogRepository.update(
+          { id: yandexLogEntity.id },
+          {
+            error: error.message,
+            httpStatus: error.response?.status,
+          },
+        );
+        throw new AppError(error.message, 'GET_TRANSACTIONS');
+      }
     }
   }
 }
