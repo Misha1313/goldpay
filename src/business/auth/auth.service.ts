@@ -172,7 +172,7 @@ export class AuthService {
     }
 
     if (code !== driver?.code) {
-      console.log('Passwords do not match');
+      console.log('Passwords do not match', code, driver?.code);
       return null;
     }
 
