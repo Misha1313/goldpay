@@ -172,7 +172,7 @@ export class AuthService {
     }
 
     if (code !== driver?.code) {
-      console.log('Passwords do not match', code, driver?.code);
+      console.log('Passwords do not match');
       return null;
     }
 
@@ -199,7 +199,8 @@ export class AuthService {
   private async fillOtpCode(entity: AuthOtpCodeEntity) {
     const existingEntity = await this.authOtpCodeRepository.findOneBy({
       parkId: entity.parkId,
-      driverId: entity.driverId,
+      phoneNumber: entity.phoneNumber,
+      roleId: entity.roleId,
     });
 
     if (!existingEntity) {
