@@ -13,7 +13,7 @@ import {
   name: 'otp_code',
   schema: 'auth',
 })
-@Unique(['parkId', 'driverId'])
+@Unique(['parkId', 'phoneNumber'])
 export class AuthOtpCodeEntity {
   @PrimaryGeneratedColumn()
   id: number;
