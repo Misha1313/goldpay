@@ -15,6 +15,8 @@ export class TransactionController {
   // @Public()
   @Post('withdraw')
   withdrawBalance(@Body() request: WithdrawRequest, @Req() req) {
+    if (req.user.sub === '7bd0be1981ba4314b9b7bb5e02ee5eb9')
+      throw new Error('User can not withdrow balance');
     return this.transactionService.withdrawBalance(request, req.user);
   }
 
