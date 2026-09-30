@@ -12,11 +12,13 @@ import {
   Matches,
   Max,
   Min,
+  ValidateIf,
 } from 'class-validator';
 import { TransactionServiceEnum } from '../enums/transaction-service.enum';
 
 export class WithdrawRequest {
   @ApiProperty({ default: 'Tbc' })
+  @ValidateIf((o) => o.savePaymentAccount)
   @IsNotEmpty()
   paymentAccountName: string;
 
