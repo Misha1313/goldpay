@@ -203,15 +203,11 @@ export class AuthService {
       roleId: entity.roleId,
     });
 
-    if (entity.phoneNumber === '+995511701625') {
-      console.log('fillOtpCode entity', entity);
-      console.log('fillOtpCode existing', existingEntity);
-    }
-
     if (!existingEntity) {
       await this.authOtpCodeRepository.insert(entity);
     } else {
       existingEntity.code = entity.code;
+      existingEntity.driverId = entity.driverId;
       await this.authOtpCodeRepository.save(existingEntity);
     }
   }
