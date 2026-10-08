@@ -6,6 +6,7 @@ import { AddBalanceRollbackTables1781350122064 } from './migrations/178135012206
 import { CreateLogTables1782144203404 } from './migrations/1782144203404-CreateLogTables';
 import { AddLogoutDateInAuthTable1787281646353 } from './migrations/1787281646353-AddLogoutDateInAuthTable';
 import { EditAuthOtpCodeUniqueConstraint1790014285410 } from './migrations/1790014285410-EditAuthOtpCodeUniqueConstraint';
+import { CreateAdminConfigTable1791395228029 } from './migrations/1791395228029-CreateAdminConfigTable';
 
 export const migrations = [
   CreateAuthTables1764779169345,
@@ -16,4 +17,5 @@ export const migrations = [
   CreateLogTables1782144203404,
   AddLogoutDateInAuthTable1787281646353,
   EditAuthOtpCodeUniqueConstraint1790014285410,
+  CreateAdminConfigTable1791395228029,
 ];

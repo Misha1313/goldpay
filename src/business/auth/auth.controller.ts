@@ -17,6 +17,7 @@ import { LoginOtpDto } from './dto/login-otp.dto';
 import { ConfigService } from '@nestjs/config';
 import { JwtAuthRefreshGuard } from './guards/jwt-auth-refresh.guard';
 import { addSeconds } from 'date-fns';
+import { RoleEnum } from '../common/enums/role.enum';
 
 @Controller('auth')
 @ApiTags('Auth')
@@ -28,10 +29,12 @@ export class AuthController {
   ) {}
 
   @Public()
-  // @UseGuards(LocalAuthGuard)
   @Post('send-otp')
   async sendOtp(@Body() sendOtpDto: SendOtpDto) {
-    return this.authService.sendOtp(sendOtpDto);
+    if (sendOtpDto.roleId === RoleEnum.User)
+      return this.authService.sendOtp(sendOtpDto);
+    if (sendOtpDto.roleId === RoleEnum.Admin)
+      return this.authService.sendOtpAdmin(sendOtpDto);
   }
 
   @Public()

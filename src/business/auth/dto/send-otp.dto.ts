@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsNotEmpty, IsNumber, Matches } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsNumber, Matches } from 'class-validator';
+import { RoleEnum } from 'src/business/common/enums/role.enum';
 
 export class SendOtpDto {
   @ApiProperty({ default: '+995577090280' })
@@ -15,6 +16,6 @@ export class SendOtpDto {
 
   @ApiProperty({ default: 0 })
   @Type(() => Number)
-  @IsNumber()
+  @IsEnum(RoleEnum)
   roleId: number;
 }

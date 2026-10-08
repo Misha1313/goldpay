@@ -11,6 +11,7 @@ import { PaymentModule } from './providers/payment/payment.module';
 import { TransactionModule } from './business/transaction/transaction.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { CommonModule } from './business/common/common.module';
+import { AdminConfigModule } from './business/admin/admin-config/admin-config.module';
 
 @Module({
   imports: [
@@ -23,7 +24,8 @@ import { CommonModule } from './business/common/common.module';
     PaymentModule,
     TransactionModule,
     ScheduleModule.forRoot(),
-    CommonModule
+    CommonModule,
+    AdminConfigModule,
   ],
   controllers: [AppController],
   providers: [AppService],

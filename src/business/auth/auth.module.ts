@@ -4,7 +4,6 @@ import { AuthController } from './auth.controller';
 import { JwtModule } from '@nestjs/jwt';
 import { APP_GUARD } from '@nestjs/core';
 import { PassportModule } from '@nestjs/passport';
-import { LocalStrategy } from './strategies/local.strategy';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -17,6 +16,7 @@ import { AuthOtpCodeEntity } from './entities/auth-otp-code.entity';
 import { SmsModule } from 'src/providers/sms/sms.module';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { JwtAuthRefreshGuard } from './guards/jwt-auth-refresh.guard';
+import { AdminConfigModule } from '../admin/admin-config/admin-config.module';
 
 @Module({
   imports: [
@@ -37,11 +37,11 @@ import { JwtAuthRefreshGuard } from './guards/jwt-auth-refresh.guard';
       }),
     }),
     SmsModule,
+    AdminConfigModule,
   ],
   controllers: [AuthController],
   providers: [
     AuthService,
-    LocalStrategy,
     PhoneOtpStrategy,
     JwtStrategy,
     {

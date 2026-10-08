@@ -10,6 +10,7 @@ import { differenceInSeconds } from 'date-fns';
 import { AuthEntity } from './entities/auth.entity';
 import { SmsService } from 'src/providers/sms/sms.service';
 import { ConfigService } from '@nestjs/config';
+import { AdminConfigEntity } from '../admin/admin-config/entities/admin-config.entity';
 
 export type JwtPayload = {
   sub: string;
@@ -35,6 +36,8 @@ export class AuthService {
     private readonly authRepository: Repository<AuthEntity>,
     private readonly smsService: SmsService,
     private readonly configService: ConfigService,
+    @InjectRepository(AdminConfigEntity)
+    private readonly adminConfigRepository: Repository<AdminConfigEntity>,
   ) {}
 
   async login(user: AuthOtpCodeEntity): Promise<LoginResponse> {
@@ -76,9 +79,6 @@ export class AuthService {
   }
 
   async sendOtp(sendOtpDto: SendOtpDto) {
-    // check if phone number exists. different for driver and admin. that part I should take to driver and admin services
-    // done for driver
-
     const driverInfo = await this.driverService.getDriverByPhone(
       sendOtpDto.phoneNumber,
       sendOtpDto.parkId,
@@ -97,6 +97,31 @@ export class AuthService {
     const authOtpCodeEntity = this.authOtpCodeRepository.create({
       parkId: driverInfo.parkId,
       driverId: driverInfo.driver_profile.id,
+      phoneNumber: sendOtpDto.phoneNumber,
+      roleId: sendOtpDto.roleId,
+      code: Otp,
+    });
+
+    await this.fillOtpCode(authOtpCodeEntity);
+  }
+
+  async sendOtpAdmin(sendOtpDto: SendOtpDto) {
+    const adminInfo = await this.adminConfigRepository.findOneBy({
+      phoneNumber: sendOtpDto.phoneNumber,
+    });
+
+    if (!adminInfo) throw new UnauthorizedException('Invalid credentials');
+
+    const Otp = this.generateOtp();
+
+    await this.smsService.sendSms(
+      sendOtpDto.phoneNumber.slice(1),
+      `ავტორიზაციის კოდი: ${Otp}`,
+    );
+
+    const authOtpCodeEntity = this.authOtpCodeRepository.create({
+      parkId: adminInfo.parkId,
+      driverId: null,
       phoneNumber: sendOtpDto.phoneNumber,
       roleId: sendOtpDto.roleId,
       code: Otp,

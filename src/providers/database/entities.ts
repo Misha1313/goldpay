@@ -11,6 +11,7 @@ import { TransactionStatusEntity } from 'src/business/transaction/entities/trans
 import { TransactionEntity } from 'src/business/transaction/entities/transaction.entity';
 import { YandexLogEntity } from '../yandex/yandex-log.entity';
 import { PaymentLogEntity } from '../payment/payment-log.entity';
+import { AdminConfigEntity } from 'src/business/admin/admin-config/entities/admin-config.entity';
 
 export const entities = [
   AuthEntity,
@@ -26,4 +27,5 @@ export const entities = [
   BalanceRollbackStatusEntity,
   YandexLogEntity,
   PaymentLogEntity,
+  AdminConfigEntity,
 ];
