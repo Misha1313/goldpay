@@ -224,7 +224,8 @@ export class YandexService {
     process: string,
     transactionId?: string,
   ) {
-    const retries = Number(this.configService.get<number>('RETRY_NUMBER'));
+    // const retries = Number(this.configService.get<number>('RETRY_NUMBER'));
+    const retries = 1;
     const delayMs = Number(this.configService.get<number>('RETRY_INTERVAL'));
 
     const payload = {
